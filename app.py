@@ -9,10 +9,13 @@ model_rf = joblib.load("model_rf.pkl")
 # Interface
 st.title("🌾 Simulateur Assurance Agricole")
 
-temp = st.slider("Température (°C)", 0, 50, 30)
-pluie = st.slider("Pluie (mm)", 0, 200, 20)
-humidite = st.slider("Humidité (%)", 0, 100, 50)
-vent = st.slider("Vent (km/h)", 0, 100, 20)
+temp = st.slider("Température (°C)", 0, 45, 30)
+
+pluie = st.slider("Pluie (mm)", 0, 120, 20)
+
+humidite = st.slider("Humidité (%)", 10, 100, 50)
+
+vent = st.slider("Vent (km/h)", 0, 60, 20)
 
 mois = st.selectbox("Mois", list(range(1, 13)))
 annee = st.number_input("Année", 2020, 2030, 2026)
