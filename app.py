@@ -2,15 +2,15 @@ import streamlit as st
 import joblib
 import pandas as pd
 
-# ======================
-# Charger modèle ML
-# ======================
+# =========================
+# Charger modèle
+# =========================
 
 model_rf = joblib.load("model_rf.pkl")
 
-# ======================
+# =========================
 # Interface
-# ======================
+# =========================
 
 st.title("🌾 Simulateur Assurance Agricole")
 
@@ -24,31 +24,51 @@ humidite = st.slider("Humidité (%)", 10, 100, 50)
 
 vent = st.slider("Vent (km/h)", 0, 60, 20)
 
-mois = st.selectbox("Mois", list(range(1,13)))
+mois = st.selectbox("Mois", list(range(1, 13)))
 
 annee = st.number_input("Année", 2020, 2030, 2026)
 
 region = st.selectbox(
     "Région",
-    ["Tunis","Sousse","Nabeul",
-     "Monastir","Kairouan",
-     "Kebili","Gabes","Beja"]
+    [
+        "Tunis",
+        "Sousse",
+        "Nabeul",
+        "Monastir",
+        "Kairouan",
+        "Kebili",
+        "Gabes",
+        "Beja"
+    ]
 )
 
-saison = st.selectbox(
-    "Saison",
-    ["Hiver","Printemps","Été","Automne"]
-)
+# =========================
+# Saison automatique
+# =========================
 
-# ======================
+if mois in [12, 1, 2]:
+    saison = "Hiver"
+
+elif mois in [3, 4, 5]:
+    saison = "Printemps"
+
+elif mois in [6, 7, 8]:
+    saison = "Été"
+
+else:
+    saison = "Automne"
+
+st.write("📅 Saison :", saison)
+
+# =========================
 # Paramètres agricoles
-# ======================
+# =========================
 
 st.subheader("🚜 Paramètres agricoles")
 
 culture = st.selectbox(
     "Type de culture",
-    ["Olives","Céréales","Légumes"]
+    ["Olives", "Céréales", "Légumes"]
 )
 
 superficie = st.number_input(
@@ -59,7 +79,7 @@ superficie = st.number_input(
 )
 
 production = st.number_input(
-    "Quantité production (tonnes)",
+    "Production (tonnes)",
     1,
     10000,
     50
@@ -67,23 +87,23 @@ production = st.number_input(
 
 irrigation = st.radio(
     "Irrigation",
-    ["Oui","Non"]
+    ["Oui", "Non"]
 )
 
-# ======================
+# =========================
 # Calcul
-# ======================
+# =========================
 
 if st.button("Calculer"):
 
-    # dataframe ML
+    # dataframe pour ML
     X = pd.DataFrame(
         0,
         index=[0],
         columns=model_rf.feature_names_in_
     )
 
-    # remplir données météo
+    # variables météo
     X["temp"] = temp
     X["précipitations"] = pluie
     X["humidité"] = humidite
@@ -93,23 +113,66 @@ if st.button("Calculer"):
 
     # région
     region_col = f"region_{region}"
+
     if region_col in X.columns:
         X[region_col] = 1
 
     # saison
     saison_col = f"saison_{saison}"
+
     if saison_col in X.columns:
         X[saison_col] = 1
 
-    # ======================
+    # =========================
     # Risque ML
-    # ======================
+    # =========================
 
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
-    # ======================
+    # =========================
+    # Ajustements métier
+    # =========================
+
+    # température élevée
+    if temp > 40:
+        risque_ml += 25
+
+    elif temp > 35:
+        risque_ml += 15
+
+    # faible pluie
+    if pluie < 20:
+        risque_ml += 20
+
+    elif pluie < 50:
+        risque_ml += 10
+
+    # humidité faible
+    if humidite < 30:
+        risque_ml += 10
+
+    # vent fort
+    if vent > 50:
+        risque_ml += 10
+
+    # été
+    if saison == "Été":
+        risque_ml += 10
+
+    # régions risquées
+    if region in ["Kebili", "Kairouan"]:
+        risque_ml += 10
+
+    # irrigation réduit risque
+    if irrigation == "Oui":
+        risque_ml -= 10
+
+    # limiter entre 0 et 100
+    risque_ml = max(0, min(100, risque_ml))
+
+    # =========================
     # Calcul prime
-    # ======================
+    # =========================
 
     prime = 0
 
@@ -119,24 +182,24 @@ if st.button("Calculer"):
     # production
     prime += production * 2
 
-    # risque ML
+    # risque
     prime += risque_ml * 5
 
     # irrigation
     if irrigation == "Non":
         prime += 100
 
+    # culture sensible
+    if culture == "Céréales":
+        prime += 80
+
     # régions risquées
     if region in ["Kebili", "Kairouan"]:
         prime += 150
 
-    # cultures plus sensibles
-    if culture == "Céréales":
-        prime += 80
-
-    # ======================
-    # Affichage
-    # ======================
+    # =========================
+    # Résultats
+    # =========================
 
     st.subheader("📊 Résultats")
 
@@ -144,7 +207,6 @@ if st.button("Calculer"):
 
     st.progress(int(risque_ml))
 
-    # niveau risque
     if risque_ml < 30:
         st.success("🌿 Risque faible")
 
