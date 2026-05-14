@@ -3,14 +3,14 @@ import joblib
 import pandas as pd
 
 # ======================
-# Charger modèle IA
+# MODELE IA
 # ======================
 model_rf = joblib.load("model_rf.pkl")
 
-st.title("🌾 Simulateur Assurance Agricole (Sécheresse & Incendie)")
+st.title("🌾 Simulateur Assurance Agricole")
 
 # ======================
-# IDENTIFIANT CLIENT
+# ID CLIENT
 # ======================
 user_id = st.text_input("🆔 Identifiant utilisateur")
 
@@ -19,7 +19,7 @@ if user_id == "":
     st.stop()
 
 # ======================
-# DONNÉES CLIMATIQUES
+# CLIMAT
 # ======================
 st.subheader("🌦 Données climatiques")
 
@@ -37,9 +37,7 @@ region = st.selectbox(
      "Kairouan","Kebili","Gabes","Beja"]
 )
 
-# ======================
-# SAISON AUTOMATIQUE
-# ======================
+# saison automatique
 if mois in [12,1,2]:
     saison = "Hiver"
 elif mois in [3,4,5]:
@@ -54,22 +52,21 @@ st.write("📅 Saison :", saison)
 # ======================
 # AGRICULTURE
 # ======================
-st.subheader("🚜 Culture")
+st.subheader("🚜 Données agricoles")
 
-culture = st.selectbox(
-    "Type de culture",
-    ["Olives", "Céréales"]
-)
+culture = st.selectbox("Culture", ["Olives", "Céréales"])
+irrigation = st.radio("Irrigation", ["Oui", "Non"])
 
 superficie = st.number_input("Superficie (ha)", 1, 1000, 10)
-irrigation = st.radio("Irrigation", ["Oui", "Non"])
+
+production = st.number_input("Production (tonnes)", 1, 10000, 50)
 
 # ======================
 # PRÉDICTION IA
 # ======================
-if st.button("Calculer le risque"):
+if st.button("Calculer"):
 
-    # ===== DATA ML =====
+    # --------- DATA ML ----------
     X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
 
     X["temp"] = temp
@@ -87,84 +84,59 @@ if st.button("Calculer le risque"):
     if saison_col in X.columns:
         X[saison_col] = 1
 
-    # ======================
-    # RISQUE IA
-    # ======================
-    risque_base = model_rf.predict_proba(X)[0][1] * 100
+    # --------- RISQUE IA ----------
+    risque = model_rf.predict_proba(X)[0][1] * 100
 
     # ======================
-    # RISQUE SÉCHERESSE
+    # PRIME ASSURANCE
     # ======================
-    risque_secheresse = 0
+    prime = 0
 
-    if pluie < 20:
-        risque_secheresse += 30
-    elif pluie < 40:
-        risque_secheresse += 15
+    # base risque IA
+    prime += risque * 5
 
-    if temp > 40:
-        risque_secheresse += 20
-    elif temp > 35:
-        risque_secheresse += 10
+    # superficie
+    prime += superficie * 15
 
-    if irrigation == "Non":
-        risque_secheresse += 20
+    # production (IMPORTANT)
+    prime += production * 1.5
+
+    # culture
+    if culture == "Céréales":
+        prime += 80
     else:
-        risque_secheresse -= 10
+        prime += 30
 
-    # régions arides
+    # irrigation
+    if irrigation == "Non":
+        prime += 120
+    else:
+        prime -= 40
+
+    # région
     if region in ["Kebili", "Kairouan", "Gabes"]:
-        risque_secheresse += 10
+        prime += 100
 
     # ======================
-    # RISQUE INCENDIE
+    # LIMITATION RISQUE
     # ======================
-    risque_incendie = 0
-
-    if temp > 40:
-        risque_incendie += 25
-
-    if vent > 50:
-        risque_incendie += 20
-
-    if humidite < 30:
-        risque_incendie += 15
-
-    if region in ["Kebili", "Kairouan", "Gabes"]:
-        risque_incendie += 5
+    risque = max(0, min(100, risque))
 
     # ======================
-    # COMBINAISON
-    # ======================
-    risque_final = (0.6 * risque_secheresse) + (0.4 * risque_incendie)
-
-    # intégrer IA
-    risque_final = (0.7 * risque_base) + (0.3 * risque_final)
-
-    # limiter
-    risque_final = max(0, min(100, risque_final))
-
-    # ======================
-    # PRÉSENTATION
+    # AFFICHAGE
     # ======================
     st.subheader("📊 Résultats")
 
     st.write("🆔 Client :", user_id)
 
-    st.write(f"🌪 Risque final : {round(risque_final,2)} %")
+    st.write(f"🌪 Score de risque : {round(risque,2)} %")
+    st.progress(int(risque))
 
-    st.progress(int(risque_final))
-
-    if risque_final < 30:
+    if risque < 30:
         st.success("🌿 Risque faible")
-
-    elif risque_final < 70:
+    elif risque < 70:
         st.warning("⚠️ Alerte")
-
     else:
         st.error("🔥 Risque élevé")
 
-    # détails
-    st.write("🔥 Sécheresse :", round(risque_secheresse,2))
-    st.write("🔥 Incendie :", round(risque_incendie,2))
-    st.write("🤖 IA brute :", round(risque_base,2))
+    st.subheader(f"💰 Prime estimée : {round(prime,2)} DT")
