@@ -15,7 +15,7 @@ model_rf = joblib.load("model_rf.pkl")
 def envoyer_alerte(email_dest, user_id, region, risque):
 
     expediteur = "tonemail@gmail.com"
-    mot_de_passe = "dgif waho jwui qbve"  # sans espaces
+    mot_de_passe = "dgifwahojwuiqbve"  # sans espaces
 
     sujet = "⚠️ Alerte Risque Agricole (30-70)"
 
