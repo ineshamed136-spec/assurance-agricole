@@ -9,7 +9,7 @@ import requests
 model_rf = joblib.load("model_rf.pkl")
 
 # ======================
-# TELEGRAM ALERT (REMPLACE EMAIL)
+# TELEGRAM CONFIG
 # ======================
 BOT_TOKEN = "TON_BOT_TOKEN"
 CHAT_ID = "TON_CHAT_ID"
@@ -19,7 +19,7 @@ def envoyer_alerte_telegram(user_id, region, risque):
     message = f"""
 ⚠️ ALERTE AGRICOLE
 
-👤 User: {user_id}
+👤 Utilisateur: {user_id}
 📍 Région: {region}
 🌪 Risque: {risque:.2f} %
 
@@ -28,22 +28,21 @@ Niveau: ALERTE (30-70)
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    payload = {
+    requests.post(url, data={
         "chat_id": CHAT_ID,
         "text": message
-    }
-
-    requests.post(url, data=payload)
+    })
 
 # ======================
-# STREAMLIT UI
+# INTERFACE
 # ======================
 st.title("🌾 Assurance Agricole Intelligente")
 
 user_id = st.text_input("🆔 Identifiant utilisateur")
-
 if user_id == "":
     st.stop()
+
+email = st.text_input("📧 Email (optionnel)")
 
 # ======================
 # CLIMAT
@@ -62,7 +61,9 @@ region = st.selectbox(
      "Kairouan","Kebili","Gabes","Beja"]
 )
 
-# saison
+# ======================
+# SAISON
+# ======================
 if mois in [12,1,2]:
     saison = "Hiver"
 elif mois in [3,4,5]:
@@ -88,7 +89,7 @@ production = st.number_input("Production (tonnes)", 1, 10000, 50)
 if st.button("Calculer"):
 
     # ======================
-    # INPUT MODELE
+    # INPUT ML
     # ======================
     X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
 
@@ -184,10 +185,11 @@ if st.button("Calculer"):
         st.success("🌿 Risque faible")
 
     elif 30 <= risque < 70:
-        st.warning("⚠️ ALERTE")
+        st.warning("⚠️ ALERTE MODÉRÉE")
 
         envoyer_alerte_telegram(user_id, region, risque)
+
         st.info("📩 Alerte envoyée via Telegram")
 
     else:
-        st.error("🔥 Risque élevé")
+        st.error("🔥 RISQUE ÉLEVÉ")
