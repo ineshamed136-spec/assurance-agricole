@@ -9,43 +9,71 @@ import requests
 model_rf = joblib.load("model_rf.pkl")
 
 # ======================
-# TELEGRAM
+# TELEGRAM CONFIG
 # ======================
 BOT_TOKEN = "TON_BOT_TOKEN"
 CHAT_ID = "TON_CHAT_ID"
 
-def envoyer_alerte_telegram(user_id, region, risque):
+# ======================
+# ALERT TELEGRAM
+# ======================
+def envoyer_alerte_telegram(user_id, region, risque, temp, pluie, vent, saison):
+
+    # Cause principale du risque
+    if pluie < 20:
+        cause = "Sécheresse critique"
+    elif temp > 40:
+        cause = "Chaleur élevée / risque incendie"
+    elif vent > 50:
+        cause = "Vent fort (propagation incendie)"
+    else:
+        cause = "Conditions climatiques défavorables"
 
     message = f"""
-⚠️ ALERTE AGRICOLE
+🌾 ALERTE AGRICOLE INTELLIGENTE
 
-👤 User: {user_id}
-📍 Région: {region}
-🌪 Risque: {risque:.2f} %
+👤 Utilisateur : {user_id}
+📍 Région : {region}
+📅 Saison : {saison}
+
+🌪 Score de risque : {risque:.2f} %
+
+⚠️ Cause principale : {cause}
+
+📌 Recommandations :
+- Vérifier irrigation
+- Surveiller les cultures
+- Éviter exposition au vent fort
+
+🚨 Niveau : ALERTE ASSURANCE AGRICOLE
 """
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    requests.post(url, data={"chat_id": CHAT_ID, "text": message})
+    requests.post(url, data={
+        "chat_id": CHAT_ID,
+        "text": message
+    })
 
 # ======================
-# INTERFACE
+# INTERFACE STREAMLIT
 # ======================
 st.title("🌾 Assurance Agricole Intelligente")
 
-user_id = st.text_input("🆔 Identifiant")
+user_id = st.text_input("🆔 Identifiant utilisateur")
 if user_id == "":
     st.stop()
 
 # ======================
 # CLIMAT
 # ======================
-temp = st.slider("Température", 0, 50, 30)
-pluie = st.slider("Pluie", 0, 200, 20)
-humidite = st.slider("Humidité", 0, 100, 50)
-vent = st.slider("Vent", 0, 100, 20)
+temp = st.slider("Température (°C)", 0, 50, 30)
+pluie = st.slider("Pluie (mm)", 0, 200, 20)
+humidite = st.slider("Humidité (%)", 0, 100, 50)
+vent = st.slider("Vent (km/h)", 0, 100, 20)
 
 mois = st.selectbox("Mois", list(range(1, 13)))
+annee = st.number_input("Année", 2020, 2035, 2026)
 
 region = st.selectbox(
     "Région",
@@ -66,13 +94,15 @@ elif mois in [6,7,8]:
 else:
     saison = "Automne"
 
-st.write("📅 Saison:", saison)
+st.write("📅 Saison :", saison)
 
 # ======================
 # AGRICULTURE
 # ======================
 culture = st.selectbox("Culture", ["Olives", "Céréales"])
 irrigation = st.radio("Irrigation", ["Oui", "Non"])
+superficie = st.number_input("Superficie (ha)", 1, 1000, 10)
+production = st.number_input("Production (tonnes)", 1, 10000, 50)
 
 # ======================
 # CALCUL
@@ -80,7 +110,7 @@ irrigation = st.radio("Irrigation", ["Oui", "Non"])
 if st.button("Calculer"):
 
     # ======================
-    # ML INPUT
+    # INPUT ML
     # ======================
     X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
 
@@ -89,6 +119,7 @@ if st.button("Calculer"):
     X["humidité"] = humidite
     X["vent"] = vent
     X["mois"] = mois
+    X["annee"] = annee
 
     region_col = f"region_{region}"
     if region_col in X.columns:
@@ -108,7 +139,7 @@ if st.button("Calculer"):
     # ======================
     risque_regle = 0
 
-    # 🌍 REGIONS
+    # 🌍 ZONES
     zones_desertiques = ["Kebili", "Gabes", "Medenine"]
     zones_centrales = ["Kairouan"]
     zones_cotieres = ["Tunis", "Nabeul", "Bizerte", "Beja"]
@@ -116,7 +147,6 @@ if st.button("Calculer"):
     # ======================
     # 🌡 TEMPÉRATURE (INCENDIE)
     # ======================
-
     if region in zones_desertiques:
         if temp > 48:
             risque_regle += 25
@@ -136,9 +166,8 @@ if st.button("Calculer"):
             risque_regle += 20
 
     # ======================
-    # 🌵 PLUIE (SÉCHERESSE)
+    # 🌵 SÉCHERESSE (PLUIE)
     # ======================
-
     if region in zones_cotieres:
         if pluie < 20:
             risque_regle += 35
@@ -151,7 +180,7 @@ if st.button("Calculer"):
             risque_regle += 15
 
     # ======================
-    # 💨 VENT (INCENDIE)
+    # 💨 VENT
     # ======================
     if vent > 60:
         risque_regle += 25
@@ -195,7 +224,22 @@ if st.button("Calculer"):
     # ======================
     # PRIME
     # ======================
-    prime = risque * 4 + 200
+    prime = (
+        risque * 4 +
+        superficie * 12 +
+        production * 1.2
+    )
+
+    if culture == "Céréales":
+        prime += 80
+    else:
+        prime += 40
+
+    if irrigation == "Non":
+        prime += 100
+
+    if region in zones_desertiques:
+        prime += 80
 
     # ======================
     # AFFICHAGE
@@ -213,9 +257,18 @@ if st.button("Calculer"):
         st.success("🌿 Risque faible")
 
     elif 30 <= risque < 70:
-        st.warning("⚠️ ALERTE")
+        st.warning("⚠️ ALERTE MODÉRÉE")
 
-        envoyer_alerte_telegram(user_id, region, risque)
+        envoyer_alerte_telegram(
+            user_id,
+            region,
+            risque,
+            temp,
+            pluie,
+            vent,
+            saison
+        )
+
         st.info("📩 Alerte envoyée")
 
     else:
