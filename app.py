@@ -89,7 +89,7 @@ production = st.number_input("Production (tonnes)", 1, 10000, 50)
 if st.button("Calculer"):
 
     # ======================
-    # INPUT ML
+    # INPUT MODELE IA
     # ======================
     X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
 
@@ -114,39 +114,77 @@ if st.button("Calculer"):
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
     # ======================
-    # REGLES METIER
+    # REGLES METIER (CORRIGÉES)
     # ======================
     risque_regle = 0
 
-    if pluie < 20:
-        risque_regle += 20
+    # --- SÉCHERESSE ---
+    if pluie < 10:
+        risque_regle += 35
+    elif pluie < 20:
+        risque_regle += 25
     elif pluie < 40:
         risque_regle += 10
 
-    if humidite < 30:
-        risque_regle += 15
-
-    if vent > 50:
+    # --- TEMPÉRATURE (INCENDIE + SÉCHERESSE) ---
+    if temp >= 45:
+        risque_regle += 30
+    elif temp >= 40:
+        risque_regle += 20
+    elif temp >= 35:
         risque_regle += 10
 
-    zones_chaudes = ["Kebili","Kairouan","Gabes"]
+    # --- HUMIDITÉ ---
+    if humidite < 25:
+        risque_regle += 20
+    elif humidite < 40:
+        risque_regle += 10
 
+    # --- VENT ---
+    if vent > 60:
+        risque_regle += 20
+    elif vent > 40:
+        risque_regle += 10
+
+    # --- RÉGION ---
+    zones_tres_risque = ["Kebili", "Kairouan", "Gabes"]
+    zones_moyen = ["Sousse", "Nabeul", "Monastir"]
+
+    if region in zones_tres_risque:
+        risque_regle += 25
+    elif region in zones_moyen:
+        risque_regle += 10
+    else:
+        risque_regle += 5
+
+    # --- SAISON ---
     if saison == "Été":
-        if region in zones_chaudes and temp > 48:
-            risque_regle += 20
-        elif temp > 43:
-            risque_regle += 25
+        risque_regle += 25
+    elif saison == "Printemps":
+        risque_regle += 10
+    elif saison == "Automne":
+        risque_regle += 5
 
+    # --- INTERACTION SAISON + RÉGION (IMPORTANT) ---
+    if saison == "Été" and region in zones_tres_risque:
+        risque_regle += 20
+
+    # --- AGRICULTURE ---
     if irrigation == "Non":
         risque_regle += 15
+    else:
+        risque_regle -= 10
 
     if culture == "Céréales" and pluie < 30:
         risque_regle += 15
 
+    if culture == "Olives":
+        risque_regle -= 5
+
     # ======================
     # RISQUE FINAL
     # ======================
-    risque = 0.7 * risque_ml + 0.3 * risque_regle
+    risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
 
     # ======================
@@ -166,7 +204,7 @@ if st.button("Calculer"):
     if irrigation == "Non":
         prime += 100
 
-    if region in zones_chaudes:
+    if region in zones_tres_risque:
         prime += 80
 
     # ======================
