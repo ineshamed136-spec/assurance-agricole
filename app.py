@@ -63,17 +63,34 @@ def get_weather(region, mois, annee, coords):
 
         p = data["properties"]["parameter"]
 
-        key = f"{annee}{mois:02d}"
+        def extract(param):
 
-        def safe(d):
-            if d is None:
+            if not param:
                 return None
-            return d.get(key)
 
-        temp = safe(p.get("T2M"))
-        pluie = safe(p.get("PRECTOTCORR"))
-        humidite = safe(p.get("RH2M"))
-        vent = safe(p.get("WS2M"))
+            # 🔥 1. essayer clé exacte YYYYMM
+            key = f"{annee}{mois:02d}"
+            if key in param:
+                return param[key]
+
+            # 🔥 2. essayer format JAN/FEB si existe
+            months_map = {
+                1: "JAN", 2: "FEB", 3: "MAR", 4: "APR",
+                5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG",
+                9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"
+            }
+
+            if months_map[mois] in param:
+                return param[months_map[mois]]
+
+            # 🔥 3. fallback = moyenne des valeurs
+            vals = list(param.values())
+            return sum(vals) / len(vals)
+
+        temp = extract(p.get("T2M"))
+        pluie = extract(p.get("PRECTOTCORR"))
+        humidite = extract(p.get("RH2M"))
+        vent = extract(p.get("WS2M"))
 
         if None in [temp, pluie, humidite, vent]:
             return None
@@ -82,7 +99,6 @@ def get_weather(region, mois, annee, coords):
 
     except:
         return None
-
 
 # ======================
 # COORDONNEES
