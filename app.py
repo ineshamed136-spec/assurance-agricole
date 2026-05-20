@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 
 # ======================
-# MODELE
+# MODELE ML
 # ======================
 model_rf = joblib.load("model_rf.pkl")
 
@@ -32,7 +32,7 @@ def envoyer_alerte(user_id, region, risque, saison):
     )
 
 # ======================
-# NASA POWER (ROBUSTE + PROPRE)
+# NASA POWER (SANS FALLBACK)
 # ======================
 def get_weather(region, mois, annee, coords):
 
@@ -61,15 +61,15 @@ def get_weather(region, mois, annee, coords):
 
         key = f"{annee}{mois:02d}"
 
-        def get_value(d):
-            if not d:
+        def get_val(d):
+            if d is None:
                 return None
-            return d.get(key) or list(d.values())[0]
+            return d.get(key)
 
-        temp = get_value(p.get("T2M"))
-        pluie = get_value(p.get("PRECTOTCORR"))
-        humidite = get_value(p.get("RH2M"))
-        vent = get_value(p.get("WS2M"))
+        temp = get_val(p.get("T2M"))
+        pluie = get_val(p.get("PRECTOTCORR"))
+        humidite = get_val(p.get("RH2M"))
+        vent = get_val(p.get("WS2M"))
 
         if None in [temp, pluie, humidite, vent]:
             return None
@@ -131,21 +131,20 @@ else:
 st.write("📅 Saison :", saison)
 
 # ======================
-# METEO
+# METEO NASA ONLY
 # ======================
 weather = get_weather(region, mois, annee, coords)
 
-# fallback invisible (PRO PREP)
 if weather is None:
-    temp, pluie, humidite, vent = 26, 12, 55, 10
-    st.info("ℹ️ Données météo estimées automatiquement")
-else:
-    temp, pluie, humidite, vent = weather
+    st.error("❌ Données météo indisponibles (NASA POWER)")
+    st.stop()
+
+temp, pluie, humidite, vent = weather
 
 # ======================
 # AFFICHAGE
 # ======================
-st.subheader("🌦 Données climatiques")
+st.subheader("🌦 Données climatiques (NASA POWER)")
 
 st.write(f"🌡 Température : {temp:.2f} °C")
 st.write(f"🌧 Pluie : {pluie:.2f} mm")
@@ -153,7 +152,7 @@ st.write(f"💧 Humidité : {humidite:.2f} %")
 st.write(f"💨 Vent : {vent:.2f} m/s")
 
 # ======================
-# CALCUL
+# CALCUL RISQUE
 # ======================
 if st.button("📊 Calculer le risque"):
 
@@ -203,7 +202,7 @@ if st.button("📊 Calculer le risque"):
         risque_regle += 20
 
     # ======================
-    # FINAL
+    # FINAL RISK
     # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
