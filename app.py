@@ -43,57 +43,49 @@ def get_weather(region, mois, annee, coords):
     params = {
         "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
         "community": "AG",
-        "longitude": lon,
-        "latitude": lat,
-        "start": annee,
-        "end": annee,
+        "longitude": str(lon),
+        "latitude": str(lat),
+        "start": str(annee),
+        "end": str(annee),
         "format": "JSON"
     }
 
     r = requests.get(url, params=params, timeout=30)
 
+    # 🔥 DEBUG IMPORTANT
     if r.status_code != 200:
-        st.write("DEBUG HTTP:", r.status_code)
+        st.write("NASA ERROR:", r.status_code)
+        st.write("RESPONSE:", r.text)   # 🔴 TRÈS IMPORTANT
         return None
 
     data = r.json()
 
-    # 🔴 DEBUG IMPORTANT (active si problème)
-    # st.write(data)
-
     if "properties" not in data:
-        st.write("DEBUG: pas de properties")
+        st.write("NASA FORMAT ERROR:", data)
         return None
 
     p = data["properties"]["parameter"]
 
-    # =========================
-    # 🔥 FONCTION ROBUSTE
-    # =========================
     def extract(param):
 
         if not param:
             return None
 
-        # 1️⃣ format YYYYMM
-        key1 = f"{annee}{mois:02d}"
-        if key1 in param:
-            return param[key1]
+        # YYYYMM
+        key = f"{annee}{mois:02d}"
+        if key in param:
+            return param[key]
 
-        # 2️⃣ format NASA JAN/FEB...
+        # JAN-FEB fallback
         months = ["JAN","FEB","MAR","APR","MAY","JUN",
                   "JUL","AUG","SEP","OCT","NOV","DEC"]
 
-        key2 = months[mois - 1]
-        if key2 in param:
-            return param[key2]
+        if months[mois-1] in param:
+            return param[months[mois-1]]
 
-        # 3️⃣ fallback sécurisé
-        values = [v for v in param.values() if v is not None]
-        if len(values) == 0:
-            return None
-
-        return sum(values) / len(values)
+        # moyenne fallback
+        vals = [v for v in param.values() if v is not None]
+        return sum(vals)/len(vals) if vals else None
 
     temp = extract(p.get("T2M"))
     pluie = extract(p.get("PRECTOTCORR"))
@@ -101,11 +93,9 @@ def get_weather(region, mois, annee, coords):
     vent = extract(p.get("WS2M"))
 
     if None in [temp, pluie, humidite, vent]:
-        st.write("DEBUG VALUES:", temp, pluie, humidite, vent)
         return None
 
     return float(temp), float(pluie), float(humidite), float(vent)
-
 # ======================
 # COORDONNEES
 # ======================
