@@ -32,7 +32,7 @@ def envoyer_alerte(user_id, region, risque, saison):
     )
 
 # ======================
-# NASA POWER
+# NASA POWER (VERSION CORRIGÉE)
 # ======================
 def get_weather(region, mois, annee, coords):
 
@@ -63,15 +63,17 @@ def get_weather(region, mois, annee, coords):
 
         p = data["properties"]["parameter"]
 
-        def first_value(d):
-            if not d:
-                return None
-            return list(d.values())[0]
+        key = f"{annee}{mois:02d}"
 
-        temp = first_value(p.get("T2M"))
-        pluie = first_value(p.get("PRECTOTCORR"))
-        humidite = first_value(p.get("RH2M"))
-        vent = first_value(p.get("WS2M"))
+        def safe(d):
+            if d is None:
+                return None
+            return d.get(key)
+
+        temp = safe(p.get("T2M"))
+        pluie = safe(p.get("PRECTOTCORR"))
+        humidite = safe(p.get("RH2M"))
+        vent = safe(p.get("WS2M"))
 
         if None in [temp, pluie, humidite, vent]:
             return None
@@ -138,7 +140,7 @@ st.write("📅 Saison :", saison)
 weather = get_weather(region, mois, annee, coords)
 
 if weather is None:
-    st.error("❌ Données NASA POWER indisponibles")
+    st.error("❌ NASA POWER indisponible pour cette région/mois")
     st.stop()
 
 temp, pluie, humidite, vent = weather
@@ -176,7 +178,7 @@ if st.button("📊 Calculer le risque"):
         X[saison_col] = 1
 
     # ======================
-    # PREDICTION ML
+    # ML
     # ======================
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
