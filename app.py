@@ -50,55 +50,61 @@ def get_weather(region, mois, annee, coords):
         "format": "JSON"
     }
 
-    try:
-        r = requests.get(url, params=params, timeout=30)
+    r = requests.get(url, params=params, timeout=30)
 
-        if r.status_code != 200:
-            return None
-
-        data = r.json()
-
-        if "properties" not in data:
-            return None
-
-        p = data["properties"]["parameter"]
-
-        def extract(param):
-
-            if not param:
-                return None
-
-            # 🔥 1. essayer clé exacte YYYYMM
-            key = f"{annee}{mois:02d}"
-            if key in param:
-                return param[key]
-
-            # 🔥 2. essayer format JAN/FEB si existe
-            months_map = {
-                1: "JAN", 2: "FEB", 3: "MAR", 4: "APR",
-                5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG",
-                9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"
-            }
-
-            if months_map[mois] in param:
-                return param[months_map[mois]]
-
-            # 🔥 3. fallback = moyenne des valeurs
-            vals = list(param.values())
-            return sum(vals) / len(vals)
-
-        temp = extract(p.get("T2M"))
-        pluie = extract(p.get("PRECTOTCORR"))
-        humidite = extract(p.get("RH2M"))
-        vent = extract(p.get("WS2M"))
-
-        if None in [temp, pluie, humidite, vent]:
-            return None
-
-        return float(temp), float(pluie), float(humidite), float(vent)
-
-    except:
+    if r.status_code != 200:
+        st.write("DEBUG HTTP:", r.status_code)
         return None
+
+    data = r.json()
+
+    # 🔴 DEBUG IMPORTANT (active si problème)
+    # st.write(data)
+
+    if "properties" not in data:
+        st.write("DEBUG: pas de properties")
+        return None
+
+    p = data["properties"]["parameter"]
+
+    # =========================
+    # 🔥 FONCTION ROBUSTE
+    # =========================
+    def extract(param):
+
+        if not param:
+            return None
+
+        # 1️⃣ format YYYYMM
+        key1 = f"{annee}{mois:02d}"
+        if key1 in param:
+            return param[key1]
+
+        # 2️⃣ format NASA JAN/FEB...
+        months = ["JAN","FEB","MAR","APR","MAY","JUN",
+                  "JUL","AUG","SEP","OCT","NOV","DEC"]
+
+        key2 = months[mois - 1]
+        if key2 in param:
+            return param[key2]
+
+        # 3️⃣ fallback sécurisé
+        values = [v for v in param.values() if v is not None]
+        if len(values) == 0:
+            return None
+
+        return sum(values) / len(values)
+
+    temp = extract(p.get("T2M"))
+    pluie = extract(p.get("PRECTOTCORR"))
+    humidite = extract(p.get("RH2M"))
+    vent = extract(p.get("WS2M"))
+
+    if None in [temp, pluie, humidite, vent]:
+        st.write("DEBUG VALUES:", temp, pluie, humidite, vent)
+        return None
+
+    return float(temp), float(pluie), float(humidite), float(vent)
 
 # ======================
 # COORDONNEES
