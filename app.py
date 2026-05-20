@@ -15,7 +15,7 @@ BOT_TOKEN = st.secrets["BOT_TOKEN"]
 CHAT_ID = st.secrets["CHAT_ID"]
 
 # ======================
-# FONCTION ALERTE TELEGRAM
+# ALERTES TELEGRAM
 # ======================
 def envoyer_alerte_telegram(user_id, region, risque, saison):
 
@@ -39,7 +39,7 @@ def envoyer_alerte_telegram(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER API
+# NASA POWER
 # ======================
 def get_nasa_weather(lat, lon):
 
@@ -70,7 +70,7 @@ def get_nasa_weather(lat, lon):
         return None
 
 # ======================
-# COORDONNÉES RÉGIONS
+# COORDONNEES
 # ======================
 coords = {
     "Tunis": (36.8065, 10.1815),
@@ -93,26 +93,26 @@ zones_cotieres = ["Tunis", "Nabeul", "Bizerte", "Sousse", "Monastir"]
 # ======================
 st.title("🌾 Assurance Agricole Intelligente")
 
-# 👤 USER
+# USER
 user_id = st.text_input("🆔 Identifiant utilisateur")
 if user_id == "":
     st.stop()
 
-# 📍 REGION
+# REGION
 region = st.selectbox("Région", list(coords.keys()))
 
-# 📅 TEMPS
+# TEMPS
 mois = st.selectbox("Mois", list(range(1, 13)))
 annee = 2026
 st.write("📅 Année :", annee)
 
-# 🚜 AGRICULTURE
+# AGRICULTURE
 culture = st.selectbox("Culture", ["Olives", "Céréales"])
 irrigation = st.radio("Irrigation", ["Oui", "Non"])
 superficie = st.number_input("Superficie (ha)", 1, 1000, 10)
 production = st.number_input("Production (tonnes)", 1, 10000, 50)
 
-# 🌦 SAISON
+# SAISON
 if mois in [12, 1, 2]:
     saison = "Hiver"
 elif mois in [3, 4, 5]:
@@ -125,19 +125,18 @@ else:
 st.write("📅 Saison :", saison)
 
 # ======================
-# Météo NASA POWER
+# METEO NASA
 # ======================
 lat, lon = coords[region]
 weather = get_nasa_weather(lat, lon)
 
-if weather:
+if weather is not None:
     temp, pluie, humidite, vent = weather
 else:
-    # fallback
     temp, pluie, humidite, vent = 30, 20, 50, 15
 
 # ======================
-# AFFICHAGE MÉTÉO
+# AFFICHAGE METEO
 # ======================
 st.subheader("🌦 Conditions climatiques")
 
@@ -147,13 +146,11 @@ st.write(f"💧 Humidité : {humidite}")
 st.write(f"💨 Vent : {vent}")
 
 # ======================
-# CALCUL RISQUE
+# CALCUL
 # ======================
 if st.button("Calculer le risque"):
 
-    # ======================
-    # INPUT MODEL
-    # ======================
+    # INPUT ML
     X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
 
     X["temp"] = temp
@@ -171,14 +168,10 @@ if st.button("Calculer le risque"):
     if saison_col in X.columns:
         X[saison_col] = 1
 
-    # ======================
-    # IA RISK
-    # ======================
+    # IA
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
-    # ======================
-    # REGLES METIER
-    # ======================
+    # REGLES
     risque_regle = 0
 
     if pluie < 20:
@@ -202,15 +195,11 @@ if st.button("Calculer le risque"):
     if region in zones_cotieres and temp > 35:
         risque_regle += 15
 
-    # ======================
     # RISQUE FINAL
-    # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
 
-    # ======================
     # PRIME
-    # ======================
     prime = risque * 4 + superficie * 12 + production * 1.2
 
     if irrigation == "Non":
@@ -221,9 +210,7 @@ if st.button("Calculer le risque"):
     else:
         prime += 40
 
-    # ======================
     # RESULTATS
-    # ======================
     st.subheader("📊 Résultats")
 
     st.progress(int(risque))
@@ -231,9 +218,7 @@ if st.button("Calculer le risque"):
     st.write(f"🌪 Risque : {risque:.2f} %")
     st.write(f"💰 Prime : {prime:.2f} DT")
 
-    # ======================
     # ALERTES
-    # ======================
     if risque < 30:
         st.success("🌿 Risque faible")
 
@@ -242,10 +227,7 @@ if st.button("Calculer le risque"):
 
         envoyer_alerte_telegram(user_id, region, risque, saison)
 
-        st.info("📩 Alerte envoyée via Telegram")
+        st.info("📩 Alerte envoyée")
 
     else:
         st.error("🔥 RISQUE ÉLEVÉ")
-
-    else:
-        st.error("RISQUE ÉLEVÉ")
