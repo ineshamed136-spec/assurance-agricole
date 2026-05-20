@@ -7,7 +7,7 @@ import requests
 # CONFIG PAGE
 # ======================
 st.set_page_config(
-    page_title="Assurance Agricole",
+    page_title="Assurance Agricole Intelligente",
     page_icon="🌾",
     layout="centered"
 )
@@ -24,7 +24,7 @@ BOT_TOKEN = st.secrets["BOT_TOKEN"]
 CHAT_ID = st.secrets["CHAT_ID"]
 
 # ======================
-# FONCTION TELEGRAM
+# TELEGRAM ALERT
 # ======================
 def envoyer_alerte(user_id, region, risque, saison):
 
@@ -35,7 +35,7 @@ def envoyer_alerte(user_id, region, risque, saison):
 📍 Région : {region}
 📅 Saison : {saison}
 
-🌪 Risque : {risque:.2f} %
+🌪 Risque détecté : {risque:.2f} %
 """
 
     try:
@@ -79,22 +79,12 @@ coords = {
 }
 
 # ======================
-# ZONES DESERTIQUES
-# ======================
-zones_desertiques = [
-    "Kebili",
-    "Gabes",
-    "Medenine"
-]
-
-# ======================
 # NASA POWER
 # ======================
 def get_weather(region, mois, annee):
 
     lat, lon = coords[region]
 
-    # NASA disponible jusqu'à 2025
     if annee > 2025:
         annee = 2025
 
@@ -130,11 +120,6 @@ def get_weather(region, mois, annee):
         )
 
         if r.status_code != 200:
-
-            st.error(
-                f"NASA ERROR : {r.status_code}"
-            )
-
             return None
 
         data = r.json()
@@ -145,24 +130,52 @@ def get_weather(region, mois, annee):
         p = data["properties"]["parameter"]
 
         # ======================
-        # EXTRACTION PAR MOIS
+        # EXTRACTION MOIS
         # ======================
-        months = [
-            "JAN", "FEB", "MAR",
-            "APR", "MAY", "JUN",
-            "JUL", "AUG", "SEP",
-            "OCT", "NOV", "DEC"
-        ]
+        def extract_value(param):
 
-        key = months[mois - 1]
+            if not param:
+                return None
 
-        temp = p["T2M"].get(key)
+            key1 = f"{annee}{mois:02d}"
 
-        pluie = p["PRECTOTCORR"].get(key)
+            if key1 in param:
+                return param[key1]
 
-        humidite = p["RH2M"].get(key)
+            months = [
+                "JAN", "FEB", "MAR",
+                "APR", "MAY", "JUN",
+                "JUL", "AUG", "SEP",
+                "OCT", "NOV", "DEC"
+            ]
 
-        vent = p["WS2M"].get(key)
+            key2 = months[mois - 1]
+
+            if key2 in param:
+                return param[key2]
+
+            values = list(param.values())
+
+            if len(values) > 0:
+                return values[0]
+
+            return None
+
+        temp = extract_value(
+            p.get("T2M")
+        )
+
+        pluie = extract_value(
+            p.get("PRECTOTCORR")
+        )
+
+        humidite = extract_value(
+            p.get("RH2M")
+        )
+
+        vent = extract_value(
+            p.get("WS2M")
+        )
 
         if None in [
             temp,
@@ -183,10 +196,7 @@ def get_weather(region, mois, annee):
             float(vent)
         )
 
-    except Exception as e:
-
-        st.error(f"NASA EXCEPTION : {e}")
-
+    except:
         return None
 
 # ======================
@@ -222,9 +232,6 @@ mois = st.selectbox(
     list(range(1, 13))
 )
 
-# ======================
-# ANNEE
-# ======================
 annee = 2025
 
 # ======================
@@ -291,7 +298,7 @@ else:
 st.write(f"📅 Saison : {saison}")
 
 # ======================
-# METEO NASA
+# NASA POWER
 # ======================
 weather = get_weather(
     region,
@@ -333,59 +340,40 @@ st.write(
 )
 
 # ======================
-# BOUTON
+# CALCUL RISQUE
 # ======================
 if st.button("📊 Calculer le risque"):
 
-    # ======================
-    # INPUT ML
-    # ======================
     X = pd.DataFrame(
-
         0,
-
         index=[0],
-
         columns=model_rf.feature_names_in_
     )
 
     X["temp"] = temp
-
     X["précipitations"] = pluie
-
     X["humidité"] = humidite
-
     X["vent"] = vent
-
     X["mois"] = mois
-
     X["annee"] = annee
 
-    # ======================
     # REGION
-    # ======================
     region_col = f"region_{region}"
 
     if region_col in X.columns:
-
         X[region_col] = 1
 
-    # ======================
     # SAISON
-    # ======================
     saison_col = f"saison_{saison}"
 
     if saison_col in X.columns:
-
         X[saison_col] = 1
 
     # ======================
-    # PREDICTION ML
+    # ML
     # ======================
     risque_ml = (
-
-        model_rf
-        .predict_proba(X)[0][1]
+        model_rf.predict_proba(X)[0][1]
         * 100
     )
 
@@ -394,47 +382,25 @@ if st.button("📊 Calculer le risque"):
     # ======================
     risque_regle = 0
 
-    # sécheresse
     if pluie < 10:
-
         risque_regle += 30
 
-    # chaleur
     if temp > 40:
-
         risque_regle += 25
 
-    # irrigation
     if irrigation == "Non":
-
         risque_regle += 15
 
-    # céréales
-    if (
-        culture == "Céréales"
-        and pluie < 25
-    ):
-
+    if culture == "Céréales" and pluie < 25:
         risque_regle += 20
 
-    # été
     if saison == "Été":
-
         risque_regle += 15
-
-    # désert
-    if (
-        region in zones_desertiques
-        and temp > 42
-    ):
-
-        risque_regle += 20
 
     # ======================
     # RISQUE FINAL
     # ======================
     risque = (
-
         0.7 * risque_ml
         + 0.3 * risque_regle
     )
@@ -448,25 +414,10 @@ if st.button("📊 Calculer le risque"):
     # PRIME
     # ======================
     prime = (
-
         risque * 4
-
         + superficie * 12
-
         + production * 1.2
     )
-
-    if irrigation == "Non":
-
-        prime += 80
-
-    if culture == "Céréales":
-
-        prime += 60
-
-    else:
-
-        prime += 40
 
     # ======================
     # RESULTATS
@@ -476,136 +427,121 @@ if st.button("📊 Calculer le risque"):
     st.progress(int(risque))
 
     st.write(
-        f"🌪 Risque : {risque:.2f} %"
+        f"🌪 Score de risque : {risque:.2f} %"
     )
 
     st.write(
-        f"💰 Prime : {prime:.2f} DT"
+        f"💰 Prime estimée : {prime:.2f} DT"
     )
 
     # ======================
-    # ASSURANCE PARAMETRIQUE
+    # DECISION
     # ======================
-    st.subheader(
-        "🛡 Assurance Paramétrique"
-    )
-
-    evenement = None
-
-    indemnite = 0
-
-    # ======================
-    # SECHERESSE
-    # ======================
-    if pluie < 5 and temp > 35:
-
-        evenement = "Sécheresse sévère"
-
-        indemnite = (
-
-            superficie * 180
-
-            + production * 20
-        )
-
-    # ======================
-    # CANICULE
-    # ======================
-    elif temp > 45:
-
-        evenement = "Canicule extrême"
-
-        indemnite = (
-
-            superficie * 150
-
-            + production * 18
-        )
-
-    # ======================
-    # VENT VIOLENT
-    # ======================
-    elif vent > 25:
-
-        evenement = "Vent violent"
-
-        indemnite = (
-
-            superficie * 120
-
-            + production * 14
-        )
-
-    # ======================
-    # HUMIDITE
-    # ======================
-    elif humidite > 90 and pluie > 40:
-
-        evenement = (
-            "Humidité excessive"
-        )
-
-        indemnite = (
-
-            superficie * 100
-
-            + production * 12
-        )
-
-    # ======================
-    # RISQUE GLOBAL
-    # ======================
-    elif risque > 80:
-
-        evenement = (
-            "Risque climatique élevé"
-        )
-
-        indemnite = (
-
-            superficie * 130
-
-            + production * 16
-        )
-
-    # ======================
-    # RESULTAT PARAMETRIQUE
-    # ======================
-    if evenement is not None:
-
-        st.error(
-            f"⚠️ Événement détecté : {evenement}"
-        )
+    if risque < 50:
 
         st.success(
-            f"💰 Indemnisation automatique : {indemnite:.2f} DT"
+            "✅ Risque faible"
         )
 
         st.info(
-            "📌 Déclenchement automatique basé sur des seuils climatiques critiques"
+            "📌 Aucun déclenchement d'indemnité"
         )
 
     else:
 
-        st.success(
-            "✅ Aucun seuil paramétrique déclenché"
+        st.error(
+            "⚠️ Risque élevé détecté"
         )
 
-    # ======================
-    # ALERTES
-    # ======================
-    if risque < 30:
+        # ======================
+        # ASSURANCE PARAMETRIQUE
+        # ======================
+        evenement = None
 
-        st.success(
-            "🌿 Risque faible"
+        indemnite = 0
+
+        # sécheresse sévère
+        if pluie < 5 and temp > 35:
+
+            evenement = (
+                "Sécheresse sévère"
+            )
+
+            indemnite = (
+                superficie * 180
+                + production * 20
+            )
+
+        # canicule
+        elif temp > 45:
+
+            evenement = (
+                "Canicule extrême"
+            )
+
+            indemnite = (
+                superficie * 150
+                + production * 18
+            )
+
+        # vent violent
+        elif vent > 25:
+
+            evenement = (
+                "Vent violent"
+            )
+
+            indemnite = (
+                superficie * 120
+                + production * 14
+            )
+
+        # humidité excessive
+        elif humidite > 90 and pluie > 40:
+
+            evenement = (
+                "Humidité excessive"
+            )
+
+            indemnite = (
+                superficie * 100
+                + production * 12
+            )
+
+        # risque global
+        else:
+
+            evenement = (
+                "Risque climatique élevé"
+            )
+
+            indemnite = (
+                superficie * 130
+                + production * 16
+            )
+
+        # ======================
+        # RESULTATS PARAMETRIQUES
+        # ======================
+        st.subheader(
+            "🛡 Assurance Paramétrique"
         )
-
-    elif risque < 70:
 
         st.warning(
-            "⚠️ ALERTE MODÉRÉE"
+            f"⚠️ Événement détecté : {evenement}"
         )
 
+        st.success(
+            f"💰 Indemnité déclenchée automatiquement : {indemnite:.2f} DT"
+        )
+
+        st.info(
+            "📌 Déclenchement automatique basé sur les seuils climatiques"
+        )
+
+        # ======================
+        # TELEGRAM
+        # ======================
         envoyer_alerte(
             user_id,
             region,
@@ -615,10 +551,4 @@ if st.button("📊 Calculer le risque"):
 
         st.info(
             "📩 Notification envoyée"
-        )
-
-    else:
-
-        st.error(
-            "🔥 RISQUE ÉLEVÉ"
         )
