@@ -34,7 +34,7 @@ def envoyer_alerte(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER API
+# NASA POWER (CORRIGÉ)
 # ======================
 def get_weather(region, mois, annee, coords):
 
@@ -54,8 +54,11 @@ def get_weather(region, mois, annee, coords):
     }
 
     try:
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, params=params, timeout=15)
         data = r.json()
+
+        if "properties" not in data:
+            return None
 
         p = data["properties"]["parameter"]
 
@@ -123,20 +126,20 @@ else:
 st.write("📅 Saison :", saison)
 
 # ======================
-# METEO NASA POWER
+# METEO
 # ======================
 weather = get_weather(region, mois, annee, coords)
 
-if weather:
-    temp, pluie, humidite, vent = weather
-else:
-    st.error("❌ Données météo indisponibles")
+if weather is None:
+    st.error("❌ Données météo indisponibles (NASA POWER)")
     st.stop()
+
+temp, pluie, humidite, vent = weather
 
 # ======================
 # AFFICHAGE METEO
 # ======================
-st.subheader("🌦 Conditions climatiques")
+st.subheader("🌦 Données climatiques NASA POWER")
 
 st.write(f"🌡 Température : {temp:.2f} °C")
 st.write(f"🌧 Pluie : {pluie:.2f} mm")
