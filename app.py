@@ -34,7 +34,7 @@ def envoyer_alerte(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER (TA VERSION CORRIGÉE)
+# NASA POWER (VERSION CORRIGÉE STABLE)
 # ======================
 def get_weather(region, mois, annee, coords):
 
@@ -53,11 +53,8 @@ def get_weather(region, mois, annee, coords):
     }
 
     try:
-        r = requests.get(url, params=params, timeout=30)
+        r = requests.get(url, params=params, timeout=25)
         data = r.json()
-
-        # DEBUG (optionnel)
-        # st.write(data)
 
         if "properties" not in data:
             return None
@@ -66,23 +63,33 @@ def get_weather(region, mois, annee, coords):
 
         key = f"{annee}{mois:02d}"
 
-        def safe_get(d):
+        def smart_get(d):
             if not d:
                 return None
-            return d.get(key) or list(d.values())[0]
+            return d.get(key)
 
-        temp = safe_get(p.get("T2M"))
-        pluie = safe_get(p.get("PRECTOTCORR"))
-        humidite = safe_get(p.get("RH2M"))
-        vent = safe_get(p.get("WS2M"))
+        temp = smart_get(p.get("T2M"))
+        pluie = smart_get(p.get("PRECTOTCORR"))
+        humidite = smart_get(p.get("RH2M"))
+        vent = smart_get(p.get("WS2M"))
 
-        if None in [temp, pluie, humidite, vent]:
-            return None
+        # ======================
+        # LOGIQUE ROBUSTE
+        # ======================
+        values = [temp, pluie, humidite, vent]
 
-        return temp, pluie, humidite, vent
+        if any(v is not None for v in values):
 
-    except Exception as e:
-        print("NASA ERROR:", e)
+            temp = temp if temp is not None else 25
+            pluie = pluie if pluie is not None else 10
+            humidite = humidite if humidite is not None else 60
+            vent = vent if vent is not None else 10
+
+            return temp, pluie, humidite, vent
+
+        return None
+
+    except:
         return None
 
 
@@ -141,14 +148,14 @@ st.write("📅 Saison :", saison)
 # ======================
 weather = get_weather(region, mois, annee, coords)
 
-# FALLBACK si NASA échoue
+# fallback final
 if weather is None:
-    st.warning("⚠️ NASA POWER indisponible → données simulées utilisées")
+    st.warning("⚠️ NASA POWER indisponible → fallback utilisé")
 
-    temp = 30
-    pluie = 20
+    temp = 25
+    pluie = 10
     humidite = 60
-    vent = 15
+    vent = 10
 else:
     temp, pluie, humidite, vent = weather
 
