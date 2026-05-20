@@ -32,7 +32,7 @@ def envoyer_alerte(user_id, region, risque, saison):
     )
 
 # ======================
-# NASA POWER (VERSION ROBUSTE FINALE)
+# NASA POWER
 # ======================
 def get_weather(region, mois, annee, coords):
 
@@ -51,7 +51,11 @@ def get_weather(region, mois, annee, coords):
     }
 
     try:
-        r = requests.get(url, params=params, timeout=25)
+        r = requests.get(url, params=params, timeout=30)
+
+        if r.status_code != 200:
+            return None
+
         data = r.json()
 
         if "properties" not in data:
@@ -59,7 +63,6 @@ def get_weather(region, mois, annee, coords):
 
         p = data["properties"]["parameter"]
 
-        # 🔥 PRISE DIRECTE DE VALEUR (SANS KEY MOIS)
         def first_value(d):
             if not d:
                 return None
@@ -84,15 +87,15 @@ def get_weather(region, mois, annee, coords):
 # ======================
 coords = {
     "Tunis": (36.8065, 10.1815),
-    "Nabeul": (36.4513, 10.7357),
-    "Bizerte": (37.2744, 9.8739),
-    "Beja": (36.7256, 9.1817),
-    "Sousse": (35.8256, 10.6084),
-    "Monastir": (35.7643, 10.8113),
-    "Kairouan": (35.6781, 10.0963),
-    "Kebili": (33.7076, 8.9711),
-    "Gabes": (33.8815, 10.0982),
-    "Medenine": (33.3549, 10.5055)
+    "Nabeul": (36.45, 10.73),
+    "Bizerte": (37.27, 9.87),
+    "Beja": (36.72, 9.18),
+    "Sousse": (35.82, 10.60),
+    "Monastir": (35.76, 10.81),
+    "Kairouan": (35.67, 10.09),
+    "Kebili": (33.70, 8.97),
+    "Gabes": (33.88, 10.09),
+    "Medenine": (33.35, 10.50)
 }
 
 zones_desertiques = ["Kebili", "Gabes", "Medenine"]
@@ -173,7 +176,7 @@ if st.button("📊 Calculer le risque"):
         X[saison_col] = 1
 
     # ======================
-    # ML
+    # PREDICTION ML
     # ======================
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
@@ -201,7 +204,7 @@ if st.button("📊 Calculer le risque"):
         risque_regle += 20
 
     # ======================
-    # FINAL
+    # RISQUE FINAL
     # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
