@@ -80,13 +80,9 @@ region = st.selectbox(
 
 mois = st.selectbox("Mois", list(range(1, 13)))
 
-annee = st.number_input(
-    "Année",
-    min_value=2020,
-    max_value=2035,
-    value=2026
-)
+annee = 2026
 
+st.write("📅 Année :", annee)
 culture = st.selectbox(
     "Culture",
     ["Olives", "Céréales"]
