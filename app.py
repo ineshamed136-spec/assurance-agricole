@@ -25,7 +25,7 @@ def envoyer_alerte_telegram(user_id, region, risque, saison):
 
 🌪 Risque : {risque:.2f} %
 
-⚠️ ALERTE MODÉRÉE
+⚠️ Niveau : ALERTE MODÉRÉE
 """
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -36,12 +36,14 @@ def envoyer_alerte_telegram(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER (MOYENNE MENSUELLE)
+# NASA POWER
 # ======================
-def get_nasa_weather(lat, lon, mois, annee):
+def get_nasa_power(region, mois, annee, coords):
 
-    start = f"{annee}{mois:02d}01"
-    end = f"{annee}{mois:02d}28"
+    lat, lon = coords[region]
+
+    start = f"{annee}{mois:02d}"
+    end = f"{annee}{mois:02d}"
 
     url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
 
@@ -86,7 +88,6 @@ coords = {
 }
 
 zones_desertiques = ["Kebili", "Gabes", "Medenine"]
-zones_cotieres = ["Tunis", "Nabeul", "Bizerte", "Sousse", "Monastir"]
 
 # ======================
 # INTERFACE
@@ -98,15 +99,13 @@ user_id = st.text_input("🆔 Identifiant utilisateur")
 if user_id == "":
     st.stop()
 
-# REGION
+# INPUTS
 region = st.selectbox("Région", list(coords.keys()))
-
-# TEMPS
 mois = st.selectbox("Mois", list(range(1, 13)))
 annee = 2026
+
 st.write("📅 Année :", annee)
 
-# AGRICULTURE
 culture = st.selectbox("Culture", ["Olives", "Céréales"])
 irrigation = st.radio("Irrigation", ["Oui", "Non"])
 superficie = st.number_input("Superficie (ha)", 1, 1000, 10)
@@ -127,20 +126,20 @@ else:
 st.write("📅 Saison :", saison)
 
 # ======================
-# METEO NASA
+# NASA POWER DATA
 # ======================
-lat, lon = coords[region]
-weather = get_nasa_weather(lat, lon, mois, annee)
+weather = get_nasa_power(region, mois, annee, coords)
 
 if weather:
     temp, pluie, humidite, vent = weather
 else:
-    temp, pluie, humidite, vent = 30, 20, 50, 15
+    temp, pluie, humidite, vent = 0, 0, 0, 0
+    st.warning("Données météo indisponibles")
 
 # ======================
-# AFFICHAGE METEO
+# DISPLAY
 # ======================
-st.subheader("🌦 Conditions climatiques (NASA POWER)")
+st.subheader("🌦 Données climatiques NASA POWER")
 
 st.write(f"🌡 Température : {round(temp,2)} °C")
 st.write(f"🌧 Pluie : {round(pluie,2)} mm")
@@ -152,9 +151,6 @@ st.write(f"💨 Vent : {round(vent,2)} m/s")
 # ======================
 if st.button("Calculer le risque"):
 
-    # ======================
-    # INPUT ML
-    # ======================
     X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
 
     X["temp"] = temp
@@ -173,7 +169,7 @@ if st.button("Calculer le risque"):
         X[saison_col] = 1
 
     # ======================
-    # IA RISK
+    # ML
     # ======================
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
@@ -199,9 +195,6 @@ if st.button("Calculer le risque"):
 
     if region in zones_desertiques and temp > 42:
         risque_regle += 20
-
-    if region in zones_cotieres and temp > 35:
-        risque_regle += 10
 
     # ======================
     # RISQUE FINAL
@@ -240,10 +233,8 @@ if st.button("Calculer le risque"):
 
     elif risque < 70:
         st.warning("⚠️ ALERTE MODÉRÉE")
-
         envoyer_alerte_telegram(user_id, region, risque, saison)
-
-        st.info("📩 Alerte envoyée")
+        st.info("📩 Notification envoyée")
 
     else:
         st.error("🔥 RISQUE ÉLEVÉ")
