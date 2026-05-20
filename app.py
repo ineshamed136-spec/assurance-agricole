@@ -9,14 +9,11 @@ import requests
 model_rf = joblib.load("model_rf.pkl")
 
 # ======================
-# TELEGRAM CONFIG
+# TELEGRAM
 # ======================
 BOT_TOKEN = st.secrets["BOT_TOKEN"]
 CHAT_ID = st.secrets["CHAT_ID"]
 
-# ======================
-# ALERTES TELEGRAM
-# ======================
 def envoyer_alerte_telegram(user_id, region, risque, saison):
 
     message = f"""
@@ -39,19 +36,22 @@ def envoyer_alerte_telegram(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER
+# NASA POWER (MOYENNE MENSUELLE)
 # ======================
-def get_nasa_weather(lat, lon):
+def get_nasa_weather(lat, lon, mois, annee):
 
-    url = "https://power.larc.nasa.gov/api/temporal/daily/point"
+    start = f"{annee}{mois:02d}01"
+    end = f"{annee}{mois:02d}28"
+
+    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
 
     params = {
         "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
         "community": "AG",
         "longitude": lon,
         "latitude": lat,
-        "start": "20240101",
-        "end": "20240101",
+        "start": start,
+        "end": end,
         "format": "JSON"
     }
 
@@ -59,10 +59,10 @@ def get_nasa_weather(lat, lon):
         r = requests.get(url, params=params, timeout=10)
         data = r.json()["properties"]["parameter"]
 
-        temp = list(data["T2M"].values())[0]
-        pluie = list(data["PRECTOTCORR"].values())[0]
-        humidite = list(data["RH2M"].values())[0]
-        vent = list(data["WS2M"].values())[0]
+        temp = data["T2M"][start]
+        pluie = data["PRECTOTCORR"][start]
+        humidite = data["RH2M"][start]
+        vent = data["WS2M"][start]
 
         return temp, pluie, humidite, vent
 
@@ -112,7 +112,9 @@ irrigation = st.radio("Irrigation", ["Oui", "Non"])
 superficie = st.number_input("Superficie (ha)", 1, 1000, 10)
 production = st.number_input("Production (tonnes)", 1, 10000, 50)
 
+# ======================
 # SAISON
+# ======================
 if mois in [12, 1, 2]:
     saison = "Hiver"
 elif mois in [3, 4, 5]:
@@ -128,9 +130,9 @@ st.write("📅 Saison :", saison)
 # METEO NASA
 # ======================
 lat, lon = coords[region]
-weather = get_nasa_weather(lat, lon)
+weather = get_nasa_weather(lat, lon, mois, annee)
 
-if weather is not None:
+if weather:
     temp, pluie, humidite, vent = weather
 else:
     temp, pluie, humidite, vent = 30, 20, 50, 15
@@ -138,19 +140,21 @@ else:
 # ======================
 # AFFICHAGE METEO
 # ======================
-st.subheader("🌦 Conditions climatiques")
+st.subheader("🌦 Conditions climatiques (NASA POWER)")
 
-st.write(f"🌡 Température : {temp}")
-st.write(f"🌧 Pluie : {pluie}")
-st.write(f"💧 Humidité : {humidite}")
-st.write(f"💨 Vent : {vent}")
+st.write(f"🌡 Température : {round(temp,2)} °C")
+st.write(f"🌧 Pluie : {round(pluie,2)} mm")
+st.write(f"💧 Humidité : {round(humidite,2)} %")
+st.write(f"💨 Vent : {round(vent,2)} m/s")
 
 # ======================
-# CALCUL
+# CALCUL RISQUE
 # ======================
 if st.button("Calculer le risque"):
 
+    # ======================
     # INPUT ML
+    # ======================
     X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
 
     X["temp"] = temp
@@ -168,23 +172,27 @@ if st.button("Calculer le risque"):
     if saison_col in X.columns:
         X[saison_col] = 1
 
-    # IA
+    # ======================
+    # IA RISK
+    # ======================
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
-    # REGLES
+    # ======================
+    # REGLES METIER
+    # ======================
     risque_regle = 0
 
-    if pluie < 20:
-        risque_regle += 25
+    if pluie < 10:
+        risque_regle += 30
 
     if temp > 40:
-        risque_regle += 20
+        risque_regle += 25
 
     if irrigation == "Non":
         risque_regle += 15
 
-    if culture == "Céréales" and pluie < 30:
-        risque_regle += 15
+    if culture == "Céréales" and pluie < 25:
+        risque_regle += 20
 
     if saison == "Été":
         risque_regle += 15
@@ -193,13 +201,17 @@ if st.button("Calculer le risque"):
         risque_regle += 20
 
     if region in zones_cotieres and temp > 35:
-        risque_regle += 15
+        risque_regle += 10
 
+    # ======================
     # RISQUE FINAL
+    # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
 
+    # ======================
     # PRIME
+    # ======================
     prime = risque * 4 + superficie * 12 + production * 1.2
 
     if irrigation == "Non":
@@ -210,7 +222,9 @@ if st.button("Calculer le risque"):
     else:
         prime += 40
 
+    # ======================
     # RESULTATS
+    # ======================
     st.subheader("📊 Résultats")
 
     st.progress(int(risque))
@@ -218,7 +232,9 @@ if st.button("Calculer le risque"):
     st.write(f"🌪 Risque : {risque:.2f} %")
     st.write(f"💰 Prime : {prime:.2f} DT")
 
+    # ======================
     # ALERTES
+    # ======================
     if risque < 30:
         st.success("🌿 Risque faible")
 
