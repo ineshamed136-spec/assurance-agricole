@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 
 # ======================
-# MODELE IA
+# MODELE
 # ======================
 model_rf = joblib.load("model_rf.pkl")
 
@@ -36,14 +36,12 @@ def envoyer_alerte_telegram(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER
+# NASA POWER FUNCTION
 # ======================
 def get_nasa_power(region, mois, annee, coords):
 
     lat, lon = coords[region]
-
-    start = f"{annee}{mois:02d}"
-    end = f"{annee}{mois:02d}"
+    key = f"{annee}{mois:02d}"
 
     url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
 
@@ -52,19 +50,27 @@ def get_nasa_power(region, mois, annee, coords):
         "community": "AG",
         "longitude": lon,
         "latitude": lat,
-        "start": start,
-        "end": end,
+        "start": annee,
+        "end": annee,
         "format": "JSON"
     }
 
     try:
         r = requests.get(url, params=params, timeout=10)
-        data = r.json()["properties"]["parameter"]
+        data = r.json()
 
-        temp = data["T2M"][start]
-        pluie = data["PRECTOTCORR"][start]
-        humidite = data["RH2M"][start]
-        vent = data["WS2M"][start]
+        if "properties" not in data:
+            return None
+
+        p = data["properties"]["parameter"]
+
+        temp = p["T2M"].get(key)
+        pluie = p["PRECTOTCORR"].get(key)
+        humidite = p["RH2M"].get(key)
+        vent = p["WS2M"].get(key)
+
+        if None in [temp, pluie, humidite, vent]:
+            return None
 
         return temp, pluie, humidite, vent
 
@@ -94,22 +100,18 @@ zones_desertiques = ["Kebili", "Gabes", "Medenine"]
 # ======================
 st.title("🌾 Assurance Agricole Intelligente")
 
-# USER
 user_id = st.text_input("🆔 Identifiant utilisateur")
 if user_id == "":
     st.stop()
 
-# INPUTS
-region = st.selectbox("Région", list(coords.keys()))
-mois = st.selectbox("Mois", list(range(1, 13)))
+region = st.selectbox("📍 Région", list(coords.keys()))
+mois = st.selectbox("📅 Mois", list(range(1, 13)))
 annee = 2026
 
-st.write("📅 Année :", annee)
-
-culture = st.selectbox("Culture", ["Olives", "Céréales"])
-irrigation = st.radio("Irrigation", ["Oui", "Non"])
-superficie = st.number_input("Superficie (ha)", 1, 1000, 10)
-production = st.number_input("Production (tonnes)", 1, 10000, 50)
+culture = st.selectbox("🌱 Culture", ["Olives", "Céréales"])
+irrigation = st.radio("💧 Irrigation", ["Oui", "Non"])
+superficie = st.number_input("📏 Superficie (ha)", 1, 1000, 10)
+production = st.number_input("🌾 Production (tonnes)", 1, 10000, 50)
 
 # ======================
 # SAISON
@@ -126,30 +128,30 @@ else:
 st.write("📅 Saison :", saison)
 
 # ======================
-# NASA POWER DATA
+# Météo NASA POWER
 # ======================
 weather = get_nasa_power(region, mois, annee, coords)
 
 if weather:
     temp, pluie, humidite, vent = weather
 else:
-    temp, pluie, humidite, vent = 0, 0, 0, 0
-    st.warning("Données météo indisponibles")
+    st.error("❌ Données NASA POWER indisponibles")
+    st.stop()
 
 # ======================
-# DISPLAY
+# AFFICHAGE
 # ======================
-st.subheader("🌦 Données climatiques NASA POWER")
+st.subheader("🌦 Données climatiques")
 
-st.write(f"🌡 Température : {round(temp,2)} °C")
-st.write(f"🌧 Pluie : {round(pluie,2)} mm")
-st.write(f"💧 Humidité : {round(humidite,2)} %")
-st.write(f"💨 Vent : {round(vent,2)} m/s")
+st.write(f"🌡 Température : {temp:.2f} °C")
+st.write(f"🌧 Pluie : {pluie:.2f} mm")
+st.write(f"💧 Humidité : {humidite:.2f} %")
+st.write(f"💨 Vent : {vent:.2f} m/s")
 
 # ======================
-# CALCUL RISQUE
+# PREDICTION
 # ======================
-if st.button("Calculer le risque"):
+if st.button("📊 Calculer le risque"):
 
     X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
 
@@ -168,14 +170,10 @@ if st.button("Calculer le risque"):
     if saison_col in X.columns:
         X[saison_col] = 1
 
-    # ======================
     # ML
-    # ======================
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
-    # ======================
-    # REGLES METIER
-    # ======================
+    # RULES
     risque_regle = 0
 
     if pluie < 10:
@@ -196,15 +194,11 @@ if st.button("Calculer le risque"):
     if region in zones_desertiques and temp > 42:
         risque_regle += 20
 
-    # ======================
-    # RISQUE FINAL
-    # ======================
+    # FINAL RISK
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
 
-    # ======================
     # PRIME
-    # ======================
     prime = risque * 4 + superficie * 12 + production * 1.2
 
     if irrigation == "Non":
@@ -215,9 +209,7 @@ if st.button("Calculer le risque"):
     else:
         prime += 40
 
-    # ======================
-    # RESULTATS
-    # ======================
+    # RESULT
     st.subheader("📊 Résultats")
 
     st.progress(int(risque))
@@ -225,9 +217,7 @@ if st.button("Calculer le risque"):
     st.write(f"🌪 Risque : {risque:.2f} %")
     st.write(f"💰 Prime : {prime:.2f} DT")
 
-    # ======================
-    # ALERTES
-    # ======================
+    # ALERT
     if risque < 30:
         st.success("🌿 Risque faible")
 
