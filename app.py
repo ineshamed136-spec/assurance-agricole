@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 
 # ======================
-# MODELE
+# MODELE ML
 # ======================
 model_rf = joblib.load("model_rf.pkl")
 
@@ -34,7 +34,7 @@ def envoyer_alerte(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER (VERSION STABLE)
+# NASA POWER ROBUSTE
 # ======================
 def get_weather(region, mois, annee, coords):
 
@@ -63,18 +63,18 @@ def get_weather(region, mois, annee, coords):
 
         key = f"{annee}{mois:02d}"
 
-        # ======================
-        # SAFE GET (IMPORTANT)
-        # ======================
-        def safe(d):
-            if key in d:
-                return d[key]
-            return list(d.values())[0]  # fallback
+        def safe_get(d):
+            if not d:
+                return None
+            return d.get(key, list(d.values())[0])
 
-        temp = safe(p["T2M"])
-        pluie = safe(p["PRECTOTCORR"])
-        humidite = safe(p["RH2M"])
-        vent = safe(p["WS2M"])
+        temp = safe_get(p.get("T2M"))
+        pluie = safe_get(p.get("PRECTOTCORR"))
+        humidite = safe_get(p.get("RH2M"))
+        vent = safe_get(p.get("WS2M"))
+
+        if None in [temp, pluie, humidite, vent]:
+            return None
 
         return temp, pluie, humidite, vent
 
@@ -82,7 +82,7 @@ def get_weather(region, mois, annee, coords):
         return None
 
 # ======================
-# COORDONNEES
+# COORDONNEES TUNISIE
 # ======================
 coords = {
     "Tunis": (36.8065, 10.1815),
@@ -136,14 +136,19 @@ st.write("📅 Saison :", saison)
 # ======================
 weather = get_weather(region, mois, annee, coords)
 
+# 🔴 FALLBACK si NASA échoue
 if weather is None:
-    st.error("❌ Données météo indisponibles (NASA POWER)")
-    st.stop()
+    st.warning("⚠️ NASA POWER indisponible → données simulées utilisées")
 
-temp, pluie, humidite, vent = weather
+    temp = 30
+    pluie = 20
+    humidite = 60
+    vent = 15
+else:
+    temp, pluie, humidite, vent = weather
 
 # ======================
-# DISPLAY
+# AFFICHAGE
 # ======================
 st.subheader("🌦 Données climatiques")
 
@@ -153,7 +158,7 @@ st.write(f"💧 Humidité : {humidite:.2f} %")
 st.write(f"💨 Vent : {vent:.2f} m/s")
 
 # ======================
-# PREDICTION
+# CALCUL RISQUE
 # ======================
 if st.button("📊 Calculer le risque"):
 
@@ -180,7 +185,7 @@ if st.button("📊 Calculer le risque"):
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
     # ======================
-    # REGLES
+    # REGLES METIER
     # ======================
     risque_regle = 0
 
@@ -203,11 +208,14 @@ if st.button("📊 Calculer le risque"):
         risque_regle += 20
 
     # ======================
-    # FINAL
+    # FINAL RISK
     # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
 
+    # ======================
+    # PRIME
+    # ======================
     prime = risque * 4 + superficie * 12 + production * 1.2
 
     if irrigation == "Non":
@@ -219,7 +227,7 @@ if st.button("📊 Calculer le risque"):
         prime += 40
 
     # ======================
-    # RESULT
+    # RESULTATS
     # ======================
     st.subheader("📊 Résultats")
 
@@ -229,7 +237,7 @@ if st.button("📊 Calculer le risque"):
     st.write(f"💰 Prime : {prime:.2f} DT")
 
     # ======================
-    # ALERT
+    # ALERTES
     # ======================
     if risque < 30:
         st.success("🌿 Risque faible")
