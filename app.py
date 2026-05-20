@@ -32,7 +32,7 @@ def envoyer_alerte(user_id, region, risque, saison):
     )
 
 # ======================
-# NASA POWER (SANS FALLBACK)
+# NASA POWER (VERSION ROBUSTE FINALE)
 # ======================
 def get_weather(region, mois, annee, coords):
 
@@ -59,17 +59,16 @@ def get_weather(region, mois, annee, coords):
 
         p = data["properties"]["parameter"]
 
-        key = f"{annee}{mois:02d}"
-
-        def get_val(d):
-            if d is None:
+        # 🔥 PRISE DIRECTE DE VALEUR (SANS KEY MOIS)
+        def first_value(d):
+            if not d:
                 return None
-            return d.get(key)
+            return list(d.values())[0]
 
-        temp = get_val(p.get("T2M"))
-        pluie = get_val(p.get("PRECTOTCORR"))
-        humidite = get_val(p.get("RH2M"))
-        vent = get_val(p.get("WS2M"))
+        temp = first_value(p.get("T2M"))
+        pluie = first_value(p.get("PRECTOTCORR"))
+        humidite = first_value(p.get("RH2M"))
+        vent = first_value(p.get("WS2M"))
 
         if None in [temp, pluie, humidite, vent]:
             return None
@@ -131,12 +130,12 @@ else:
 st.write("📅 Saison :", saison)
 
 # ======================
-# METEO NASA ONLY
+# METEO NASA
 # ======================
 weather = get_weather(region, mois, annee, coords)
 
 if weather is None:
-    st.error("❌ Données météo indisponibles (NASA POWER)")
+    st.error("❌ Données NASA POWER indisponibles")
     st.stop()
 
 temp, pluie, humidite, vent = weather
@@ -202,7 +201,7 @@ if st.button("📊 Calculer le risque"):
         risque_regle += 20
 
     # ======================
-    # FINAL RISK
+    # FINAL
     # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
