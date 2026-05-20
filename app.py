@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 
 # ======================
-# MODELE
+# MODELE ML
 # ======================
 model_rf = joblib.load("model_rf.pkl")
 
@@ -14,7 +14,7 @@ model_rf = joblib.load("model_rf.pkl")
 BOT_TOKEN = st.secrets["BOT_TOKEN"]
 CHAT_ID = st.secrets["CHAT_ID"]
 
-def envoyer_alerte_telegram(user_id, region, risque, saison):
+def envoyer_alerte(user_id, region, risque, saison):
 
     message = f"""
 🌾 ALERTE AGRICOLE
@@ -24,8 +24,6 @@ def envoyer_alerte_telegram(user_id, region, risque, saison):
 📅 Saison : {saison}
 
 🌪 Risque : {risque:.2f} %
-
-⚠️ Niveau : ALERTE MODÉRÉE
 """
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -36,9 +34,9 @@ def envoyer_alerte_telegram(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER FUNCTION
+# NASA POWER API
 # ======================
-def get_nasa_power(region, mois, annee, coords):
+def get_weather(region, mois, annee, coords):
 
     lat, lon = coords[region]
     key = f"{annee}{mois:02d}"
@@ -58,9 +56,6 @@ def get_nasa_power(region, mois, annee, coords):
     try:
         r = requests.get(url, params=params, timeout=10)
         data = r.json()
-
-        if "properties" not in data:
-            return None
 
         p = data["properties"]["parameter"]
 
@@ -128,20 +123,20 @@ else:
 st.write("📅 Saison :", saison)
 
 # ======================
-# Météo NASA POWER
+# METEO NASA POWER
 # ======================
-weather = get_nasa_power(region, mois, annee, coords)
+weather = get_weather(region, mois, annee, coords)
 
 if weather:
     temp, pluie, humidite, vent = weather
 else:
-    st.error("❌ Données NASA POWER indisponibles")
+    st.error("❌ Données météo indisponibles")
     st.stop()
 
 # ======================
-# AFFICHAGE
+# AFFICHAGE METEO
 # ======================
-st.subheader("🌦 Données climatiques")
+st.subheader("🌦 Conditions climatiques")
 
 st.write(f"🌡 Température : {temp:.2f} °C")
 st.write(f"🌧 Pluie : {pluie:.2f} mm")
@@ -149,7 +144,7 @@ st.write(f"💧 Humidité : {humidite:.2f} %")
 st.write(f"💨 Vent : {vent:.2f} m/s")
 
 # ======================
-# PREDICTION
+# CALCUL RISQUE
 # ======================
 if st.button("📊 Calculer le risque"):
 
@@ -170,10 +165,14 @@ if st.button("📊 Calculer le risque"):
     if saison_col in X.columns:
         X[saison_col] = 1
 
+    # ======================
     # ML
+    # ======================
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
-    # RULES
+    # ======================
+    # REGLES METIER
+    # ======================
     risque_regle = 0
 
     if pluie < 10:
@@ -194,11 +193,15 @@ if st.button("📊 Calculer le risque"):
     if region in zones_desertiques and temp > 42:
         risque_regle += 20
 
-    # FINAL RISK
+    # ======================
+    # RISQUE FINAL
+    # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
 
+    # ======================
     # PRIME
+    # ======================
     prime = risque * 4 + superficie * 12 + production * 1.2
 
     if irrigation == "Non":
@@ -209,7 +212,9 @@ if st.button("📊 Calculer le risque"):
     else:
         prime += 40
 
-    # RESULT
+    # ======================
+    # RESULTATS
+    # ======================
     st.subheader("📊 Résultats")
 
     st.progress(int(risque))
@@ -217,13 +222,15 @@ if st.button("📊 Calculer le risque"):
     st.write(f"🌪 Risque : {risque:.2f} %")
     st.write(f"💰 Prime : {prime:.2f} DT")
 
-    # ALERT
+    # ======================
+    # ALERTES
+    # ======================
     if risque < 30:
         st.success("🌿 Risque faible")
 
     elif risque < 70:
         st.warning("⚠️ ALERTE MODÉRÉE")
-        envoyer_alerte_telegram(user_id, region, risque, saison)
+        envoyer_alerte(user_id, region, risque, saison)
         st.info("📩 Notification envoyée")
 
     else:
