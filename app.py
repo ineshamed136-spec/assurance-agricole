@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 
 # ======================
-# MODELE ML
+# MODELE
 # ======================
 model_rf = joblib.load("model_rf.pkl")
 
@@ -34,12 +34,11 @@ def envoyer_alerte(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER (CORRIGÉ)
+# NASA POWER (VERSION STABLE)
 # ======================
 def get_weather(region, mois, annee, coords):
 
     lat, lon = coords[region]
-    key = f"{annee}{mois:02d}"
 
     url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
 
@@ -54,7 +53,7 @@ def get_weather(region, mois, annee, coords):
     }
 
     try:
-        r = requests.get(url, params=params, timeout=15)
+        r = requests.get(url, params=params, timeout=20)
         data = r.json()
 
         if "properties" not in data:
@@ -62,13 +61,20 @@ def get_weather(region, mois, annee, coords):
 
         p = data["properties"]["parameter"]
 
-        temp = p["T2M"].get(key)
-        pluie = p["PRECTOTCORR"].get(key)
-        humidite = p["RH2M"].get(key)
-        vent = p["WS2M"].get(key)
+        key = f"{annee}{mois:02d}"
 
-        if None in [temp, pluie, humidite, vent]:
-            return None
+        # ======================
+        # SAFE GET (IMPORTANT)
+        # ======================
+        def safe(d):
+            if key in d:
+                return d[key]
+            return list(d.values())[0]  # fallback
+
+        temp = safe(p["T2M"])
+        pluie = safe(p["PRECTOTCORR"])
+        humidite = safe(p["RH2M"])
+        vent = safe(p["WS2M"])
 
         return temp, pluie, humidite, vent
 
@@ -137,9 +143,9 @@ if weather is None:
 temp, pluie, humidite, vent = weather
 
 # ======================
-# AFFICHAGE METEO
+# DISPLAY
 # ======================
-st.subheader("🌦 Données climatiques NASA POWER")
+st.subheader("🌦 Données climatiques")
 
 st.write(f"🌡 Température : {temp:.2f} °C")
 st.write(f"🌧 Pluie : {pluie:.2f} mm")
@@ -147,7 +153,7 @@ st.write(f"💧 Humidité : {humidite:.2f} %")
 st.write(f"💨 Vent : {vent:.2f} m/s")
 
 # ======================
-# CALCUL RISQUE
+# PREDICTION
 # ======================
 if st.button("📊 Calculer le risque"):
 
@@ -174,7 +180,7 @@ if st.button("📊 Calculer le risque"):
     risque_ml = model_rf.predict_proba(X)[0][1] * 100
 
     # ======================
-    # REGLES METIER
+    # REGLES
     # ======================
     risque_regle = 0
 
@@ -197,14 +203,11 @@ if st.button("📊 Calculer le risque"):
         risque_regle += 20
 
     # ======================
-    # RISQUE FINAL
+    # FINAL
     # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
 
-    # ======================
-    # PRIME
-    # ======================
     prime = risque * 4 + superficie * 12 + production * 1.2
 
     if irrigation == "Non":
@@ -216,7 +219,7 @@ if st.button("📊 Calculer le risque"):
         prime += 40
 
     # ======================
-    # RESULTATS
+    # RESULT
     # ======================
     st.subheader("📊 Résultats")
 
@@ -226,7 +229,7 @@ if st.button("📊 Calculer le risque"):
     st.write(f"💰 Prime : {prime:.2f} DT")
 
     # ======================
-    # ALERTES
+    # ALERT
     # ======================
     if risque < 30:
         st.success("🌿 Risque faible")
