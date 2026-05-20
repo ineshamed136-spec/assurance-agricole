@@ -34,7 +34,7 @@ def envoyer_alerte(user_id, region, risque, saison):
     })
 
 # ======================
-# NASA POWER ROBUSTE
+# NASA POWER (TA VERSION CORRIGÉE)
 # ======================
 def get_weather(region, mois, annee, coords):
 
@@ -53,8 +53,11 @@ def get_weather(region, mois, annee, coords):
     }
 
     try:
-        r = requests.get(url, params=params, timeout=20)
+        r = requests.get(url, params=params, timeout=30)
         data = r.json()
+
+        # DEBUG (optionnel)
+        # st.write(data)
 
         if "properties" not in data:
             return None
@@ -66,7 +69,7 @@ def get_weather(region, mois, annee, coords):
         def safe_get(d):
             if not d:
                 return None
-            return d.get(key, list(d.values())[0])
+            return d.get(key) or list(d.values())[0]
 
         temp = safe_get(p.get("T2M"))
         pluie = safe_get(p.get("PRECTOTCORR"))
@@ -78,11 +81,13 @@ def get_weather(region, mois, annee, coords):
 
         return temp, pluie, humidite, vent
 
-    except:
+    except Exception as e:
+        print("NASA ERROR:", e)
         return None
 
+
 # ======================
-# COORDONNEES TUNISIE
+# COORDONNEES
 # ======================
 coords = {
     "Tunis": (36.8065, 10.1815),
@@ -136,7 +141,7 @@ st.write("📅 Saison :", saison)
 # ======================
 weather = get_weather(region, mois, annee, coords)
 
-# 🔴 FALLBACK si NASA échoue
+# FALLBACK si NASA échoue
 if weather is None:
     st.warning("⚠️ NASA POWER indisponible → données simulées utilisées")
 
@@ -208,7 +213,7 @@ if st.button("📊 Calculer le risque"):
         risque_regle += 20
 
     # ======================
-    # FINAL RISK
+    # RISQUE FINAL
     # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
