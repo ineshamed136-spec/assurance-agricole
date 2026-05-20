@@ -32,71 +32,6 @@ def envoyer_alerte(user_id, region, risque, saison):
     )
 
 # ======================
-# NASA POWER (VERSION CORRIGÉE)
-# ======================
-def get_weather(region, mois, annee, coords):
-
-    lat, lon = coords[region]
-
-    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
-
-    params = {
-        "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
-        "community": "AG",
-        "longitude": str(lon),
-        "latitude": str(lat),
-        "start": str(annee),
-        "end": str(annee),
-        "format": "JSON"
-    }
-
-    r = requests.get(url, params=params, timeout=30)
-
-    # 🔥 DEBUG IMPORTANT
-    if r.status_code != 200:
-        st.write("NASA ERROR:", r.status_code)
-        st.write("RESPONSE:", r.text)   # 🔴 TRÈS IMPORTANT
-        return None
-
-    data = r.json()
-
-    if "properties" not in data:
-        st.write("NASA FORMAT ERROR:", data)
-        return None
-
-    p = data["properties"]["parameter"]
-
-    def extract(param):
-
-        if not param:
-            return None
-
-        # YYYYMM
-        key = f"{annee}{mois:02d}"
-        if key in param:
-            return param[key]
-
-        # JAN-FEB fallback
-        months = ["JAN","FEB","MAR","APR","MAY","JUN",
-                  "JUL","AUG","SEP","OCT","NOV","DEC"]
-
-        if months[mois-1] in param:
-            return param[months[mois-1]]
-
-        # moyenne fallback
-        vals = [v for v in param.values() if v is not None]
-        return sum(vals)/len(vals) if vals else None
-
-    temp = extract(p.get("T2M"))
-    pluie = extract(p.get("PRECTOTCORR"))
-    humidite = extract(p.get("RH2M"))
-    vent = extract(p.get("WS2M"))
-
-    if None in [temp, pluie, humidite, vent]:
-        return None
-
-    return float(temp), float(pluie), float(humidite), float(vent)
-# ======================
 # COORDONNEES
 # ======================
 coords = {
@@ -115,6 +50,75 @@ coords = {
 zones_desertiques = ["Kebili", "Gabes", "Medenine"]
 
 # ======================
+# NASA POWER FIX FINAL
+# ======================
+def get_weather(region, mois, annee, coords):
+
+    # 🔥 FIX IMPORTANT NASA LIMIT
+    if annee > 2025:
+        annee = 2025
+
+    lat, lon = coords[region]
+
+    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
+
+    params = {
+        "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
+        "community": "AG",
+        "longitude": lon,
+        "latitude": lat,
+        "start": str(annee),
+        "end": str(annee),
+        "format": "JSON"
+    }
+
+    r = requests.get(url, params=params, timeout=30)
+
+    if r.status_code != 200:
+        st.error(f"NASA ERROR HTTP: {r.status_code}")
+        return None
+
+    data = r.json()
+
+    if "properties" not in data:
+        st.error("NASA DATA FORMAT ERROR")
+        return None
+
+    p = data["properties"]["parameter"]
+
+    def extract(param):
+
+        if not param:
+            return None
+
+        # YYYYMM
+        key1 = f"{annee}{mois:02d}"
+        if key1 in param:
+            return param[key1]
+
+        # JAN-DEC
+        months = ["JAN","FEB","MAR","APR","MAY","JUN",
+                  "JUL","AUG","SEP","OCT","NOV","DEC"]
+
+        key2 = months[mois - 1]
+        if key2 in param:
+            return param[key2]
+
+        # fallback moyenne
+        values = list(param.values())
+        return sum(values) / len(values)
+
+    temp = extract(p.get("T2M"))
+    pluie = extract(p.get("PRECTOTCORR"))
+    humidite = extract(p.get("RH2M"))
+    vent = extract(p.get("WS2M"))
+
+    if None in [temp, pluie, humidite, vent]:
+        return None
+
+    return float(temp), float(pluie), float(humidite), float(vent)
+
+# ======================
 # INTERFACE
 # ======================
 st.title("🌾 Assurance Agricole Intelligente")
@@ -125,7 +129,9 @@ if not user_id:
 
 region = st.selectbox("📍 Région", list(coords.keys()))
 mois = st.selectbox("📅 Mois", list(range(1, 13)))
-annee = 2026
+
+# 🔥 FIX IMPORTANT
+annee = 2025
 
 culture = st.selectbox("🌱 Culture", ["Olives", "Céréales"])
 irrigation = st.radio("💧 Irrigation", ["Oui", "Non"])
@@ -152,7 +158,7 @@ st.write("📅 Saison :", saison)
 weather = get_weather(region, mois, annee, coords)
 
 if weather is None:
-    st.error("❌ NASA POWER indisponible pour cette région/mois")
+    st.error("❌ Données NASA indisponibles")
     st.stop()
 
 temp, pluie, humidite, vent = weather
@@ -160,7 +166,7 @@ temp, pluie, humidite, vent = weather
 # ======================
 # AFFICHAGE
 # ======================
-st.subheader("🌦 Données climatiques (NASA POWER)")
+st.subheader("🌦 Données climatiques")
 
 st.write(f"🌡 Température : {temp:.2f} °C")
 st.write(f"🌧 Pluie : {pluie:.2f} mm")
@@ -218,7 +224,7 @@ if st.button("📊 Calculer le risque"):
         risque_regle += 20
 
     # ======================
-    # RISQUE FINAL
+    # FINAL
     # ======================
     risque = (0.7 * risque_ml) + (0.3 * risque_regle)
     risque = max(0, min(100, risque))
