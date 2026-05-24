@@ -124,18 +124,4 @@ with col2:
                 
                 if c_reg in X.columns: 
                     X[c_reg] = 1
-                if c_sais in X.columns: 
-                    X[c_sais] = 1
-                
-                prob = model_rf.predict_proba(X)[0][1]
-                risque_ml = prob * 100
-            except: 
-                risque_ml = max(10.0, min(90.0, t * 2.2))
-        else:
-            risque_ml = max(10.0, min(90.0, t * 2.2))
-
-        # --- 2. RÈGLES MÉTIER AGRONOMIQUES ---
-        r_regle = 10
-        if pl < 35: 
-            r_regle += max(0, int((35 - pl) * 2.0))
-        if t >
+                if c_sais
