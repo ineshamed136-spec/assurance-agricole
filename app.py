@@ -99,4 +99,47 @@ with col1:
 with col2:
     w = get_weather(region, mois)
     t, pl, hum, vent = w[0], w[1], w[2], w[3]
-    t1, t2, t3 = st.tabs(
+    
+    # Structure simplifiée sur plusieurs lignes pour éviter les coupures
+    noms_onglets = ["🌦️ Météo", "📉 Risque", "🛡️ Indemnité"]
+    t1, t2, t3 = st.tabs(noms_onglets)
+    
+    with t1:
+        st.write(f"**Région :** {region} | **Saison :** {saison}")
+        st.info(f"Temp: {t:.2f}°C | Pluie: {pl:.2f}mm")
+    
+    if btn:
+        # --- 1. CALCUL DU MACHINE LEARNING ---
+        risque_ml = 20.0
+        if model_charge:
+            try:
+                cols = model_rf.feature_names_in_
+                X = pd.DataFrame(0, index=[0], columns=cols)
+                X["temp"] = t
+                X["précipitations"] = pl
+                X["humidité"] = hum
+                X["vent"] = vent
+                X["mois"] = mois
+                X["annee"] = 2025
+                
+                c_reg = f"region_{region}"
+                c_sais = f"saison_{saison}"
+                
+                if c_reg in X.columns:
+                    X[c_reg] = 1
+                if c_sais in X.columns:
+                    X[c_sais] = 1
+                
+                prob = model_rf.predict_proba(X)[0][1]
+                risque_ml = prob * 100
+            except: 
+                risque_ml = max(10.0, min(90.0, t * 2.2))
+        else:
+            risque_ml = max(10.0, min(90.0, t * 2.2))
+
+        # --- 2. RÈGLES MÉTIER AGRONOMIQUES ---
+        r_regle = 10
+        if pl < 35: 
+            r_regle += max(0, int((35 - pl) * 2.0))
+        if t > 30: 
+            r_regle += max(0, int((t - 30) * 3.
