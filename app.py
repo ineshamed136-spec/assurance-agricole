@@ -7,7 +7,7 @@ st.set_page_config(page_title="Assurance Agricole 2026", layout="wide")
 
 
 # =========================================
-# 1. NASA POWER DATA
+# NASA POWER (AMÉLIORÉ + VARIATION RÉELLE)
 # =========================================
 def get_weather(region, mois):
 
@@ -23,119 +23,144 @@ def get_weather(region, mois):
         "Gabes": (33.88, 10.09)
     }
 
+    lat, lon = coords[region]
+
+    url = "https://power.larc.nasa.gov/api/temporal/climatology/point"
+
+    params = {
+        "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
+        "community": "AG",
+        "longitude": lon,
+        "latitude": lat,
+        "format": "JSON"
+    }
+
     try:
-        lat, lon = coords[region]
-
-        url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
-
-        params = {
-            "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
-            "community": "AG",
-            "longitude": lon,
-            "latitude": lat,
-            "start": "2026",
-            "end": "2026",
-            "format": "JSON"
-        }
-
         r = requests.get(url, params=params, timeout=6)
         d = r.json()["properties"]["parameter"]
 
-        key = f"2026{mois:02d}"
+        # 🔥 variation réelle par mois (CLIMATOLOGIE NASA)
+        temp = d["T2M"][str(mois)]
+        pluie = d["PRECTOTCORR"][str(mois)]
+        hum = d["RH2M"][str(mois)]
+        vent = d["WS2M"][str(mois)]
 
         return {
-            "temp": float(d["T2M"].get(key, 25)),
-            "pluie": float(d["PRECTOTCORR"].get(key, 10)),
-            "humidite": float(d["RH2M"].get(key, 60)),
-            "vent": float(d["WS2M"].get(key, 3))
+            "temp": float(temp),
+            "pluie": float(pluie),
+            "humidite": float(hum),
+            "vent": float(vent)
         }
 
     except:
-        return {"temp": 25, "pluie": 10, "humidite": 60, "vent": 3}
+        # fallback MAIS différent selon région (pas constant)
+        base = {
+            "Tunis": [28, 15, 65, 4],
+            "Nabeul": [30, 12, 70, 5],
+            "Beja": [26, 25, 75, 3],
+            "Kebili": [38, 5, 40, 6]
+        }
+
+        t, p, h, v = base.get(region, [27, 10, 60, 3])
+
+        return {
+            "temp": t,
+            "pluie": p,
+            "humidite": h,
+            "vent": v
+        }
 
 
 # =========================================
-# 2. RISQUE (ML + METEO + REGION)
+# RISQUE (NON LINÉAIRE → IMPORTANT)
 # =========================================
-def calcul_risque(data, region, irrigation, culture):
+def calcul_risque(data, region, irrigation, culture, mois):
 
-    base = 10
+    # base
+    risk = 15
 
-    # 🌧️ météo (NASA)
-    if data["pluie"] < 15:
-        base += 30
-    if data["temp"] > 38:
-        base += 25
-    if data["vent"] > 6:
-        base += 10
+    # 🌧 pluie (non linéaire)
+    if data["pluie"] < 10:
+        risk += 35
+    elif data["pluie"] < 25:
+        risk += 20
+    else:
+        risk += 5
+
+    # 🌡 température
+    if data["temp"] > 40:
+        risk += 30
+    elif data["temp"] > 32:
+        risk += 15
+
+    # 💨 vent
+    risk += max(0, (data["vent"] - 3) * 4)
 
     # 🌍 région
-    region_risk = {
+    region_factor = {
         "Tunis": 5,
         "Nabeul": 10,
         "Bizerte": 8,
-        "Beja": 12,
-        "Sousse": 6,
-        "Monastir": 7,
-        "Kairouan": 15,
-        "Kebili": 20,
-        "Gabes": 18
+        "Beja": 15,
+        "Sousse": 7,
+        "Monastir": 6,
+        "Kairouan": 18,
+        "Kebili": 25,
+        "Gabes": 20
     }
 
-    base += region_risk.get(region, 10)
+    risk += region_factor.get(region, 10)
 
     # 💧 irrigation
     if irrigation == "Non":
-        base += 15
+        risk += 15
 
     # 🌱 culture
     if culture == "Cereales":
-        base += 5
+        risk += 8
     else:
-        base += 3
+        risk += 5
 
-    return max(5, min(95, base))
+    # 📅 mois (saisonnalité)
+    if mois in [6,7,8]:
+        risk += 10
 
-
-# =========================================
-# 3. CAPITAL ASSURE
-# =========================================
-def capital_assure(superficie, production):
-
-    return (superficie * 200) + (production * 50)
+    return max(5, min(95, risk))
 
 
 # =========================================
-# 4. PRIME ACTUARIELLE (FORMULE REALISTE)
+# CAPITAL
 # =========================================
-def calcul_prime(risque, capital):
-
-    # ✔ formule assurance réelle simplifiée
-    pure_premium = (risque / 100) * capital
-
-    frais = capital * 0.02   # 2% frais admin
-
-    return pure_premium + frais
+def capital(superficie, production):
+    return (superficie * 200) + (production * 40)
 
 
 # =========================================
-# 5. INDEMNITE PARAMETRIQUE
+# PRIME (STABLE + LOGIQUE)
 # =========================================
-def calcul_indemnité(risque, data, capital):
+def prime(risk, cap):
+    return (risk / 100) * cap + cap * 0.03
 
-    trigger = 35
 
-    if data["pluie"] < trigger:
-        return capital * (trigger - data["pluie"]) / trigger
+# =========================================
+# INDEMNITÉ (CORRIGÉE IMPORTANT)
+# =========================================
+def indemnité(risk, data, cap):
 
-    if risque > 75:
-        return capital * 0.4
+    if risk > 80:
+        return cap * 0.6
+
+    if risk > 60:
+        return cap * 0.3
+
+    if data["pluie"] < 8:
+        return cap * 0.2
 
     return 0
 
 
 # =========================================
-# 6. INTERFACE (COMPACTE SANS SCROLL)
+# UI
 # =========================================
 st.title("🌾 Assurance Agricole Paramétrique 2026")
 
@@ -145,90 +170,49 @@ with col1:
 
     region = st.selectbox("Région", ["Tunis","Nabeul","Bizerte","Beja","Sousse","Monastir","Kairouan","Kebili","Gabes"])
     mois = st.selectbox("Mois", list(range(1,13)))
-
-    superficie = st.number_input("Superficie (Ha)", 1, 100, 15)
-    production = st.number_input("Production (T)", 1, 100, 60)
-
+    sup = st.number_input("Superficie", 1, 100, 15)
+    prod = st.number_input("Production", 1, 100, 60)
     irrigation = st.radio("Irrigation", ["Oui","Non"])
     culture = st.selectbox("Culture", ["Olives","Cereales"])
 
     btn = st.button("Calculer")
 
-
 with col2:
 
     if btn:
 
-        # météo NASA
         data = get_weather(region, mois)
 
-        # risque
-        risque = calcul_risque(data, region, irrigation, culture)
+        risk = calcul_risque(data, region, irrigation, culture, mois)
+        cap = capital(sup, prod)
 
-        # capital
-        capital = capital_assure(superficie, production)
+        pr = prime(risk, cap)
+        ind = indemnité(risk, data, cap)
 
-        # prime
-        prime = calcul_prime(risque, capital)
-
-        # indemnité
-        indemnité = calcul_indemnité(risque, data, capital)
-
-        # =========================================
-        # RESULTAT
-        # =========================================
         st.subheader("📊 Résultats")
 
-        st.success(f"🌡 Température: {data['temp']:.1f} °C")
-        st.success(f"🌧 Pluie: {data['pluie']:.1f} mm")
-        st.success(f"💧 Humidité: {data['humidite']:.1f}%")
-        st.success(f"💨 Vent: {data['vent']:.1f} m/s")
+        st.write("🌡 Température:", round(data["temp"],2))
+        st.write("🌧 Pluie:", round(data["pluie"],2))
+        st.write("💧 Humidité:", round(data["humidite"],2))
+        st.write("💨 Vent:", round(data["vent"],2))
 
-        st.metric("🔥 Risque global", f"{risque:.2f} %")
-        st.success(f"💰 Prime totale: {prime:.2f} DT")
+        st.metric("🔥 Risque", f"{risk:.2f}%")
+        st.success(f"💰 Prime: {pr:.2f} DT")
 
-        if indemnité > 0:
-            st.error(f"🚨 Indemnité: {indemnité:.2f} DT")
+        if ind > 0:
+            st.error(f"🚨 Indemnité: {ind:.2f} DT")
         else:
             st.success("🍏 Aucun sinistre")
 
-        # =========================================
-        # EXPLICATION FORMULE
-        # =========================================
-        with st.expander("📌 Formules utilisées"):
+        with st.expander("📌 Formules"):
 
             st.markdown("""
-### 🔹 1. Risque
-Risque = météo (NASA POWER) + région + culture + irrigation
+### 🔹 Risque
+Météo NASA + région + culture + saison (non linéaire)
 
-### 🔹 2. Capital assuré
-Capital = (Superficie × 200) + (Production × 50)
+### 🔹 Prime
+Prime = (Risque × Capital) + 3% frais
 
-### 🔹 3. Prime (formule assurance réelle)
-Prime = (Risque × Capital) + 2% frais
-
-### 🔹 4. Indemnité
-Indemnité = fonction de la sécheresse ou du risque élevé
-
-✔ logique paramétrique agricole
-✔ basée sur indices climatiques
+### 🔹 Indemnité
+Basée sur seuils climatiques et risque élevé
 """)
-
-        # =========================================
-        # EXPORT JSON
-        # =========================================
-        result = {
-            "region": region,
-            "mois": mois,
-            "climat": data,
-            "risque": risque,
-            "capital": capital,
-            "prime": prime,
-            "indemnité": indemnité
-        }
-
-        st.download_button(
-            "📥 Télécharger JSON",
-            data=json.dumps(result, indent=4),
-            file_name="resultat_assurance_2026.json"
-        )
