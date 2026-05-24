@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 
 st.set_page_config(
-    page_title="Assurance Paramétrique", 
+    page_title="Assurance", 
     layout="wide"
 )
 
@@ -14,17 +14,22 @@ st.set_page_config(
 @st.cache_resource
 def load_model():
     try: 
-        return joblib.load("model_rf.pkl"), True
+        m = joblib.load("model_rf.pkl")
+        return m, True
     except: 
         return None, False
 
 model_rf, model_charge = load_model()
 
 coords = {
-    "Tunis": (36.80, 10.18), "Nabeul": (36.45, 10.73), 
-    "Bizerte": (37.27, 9.87), "Beja": (36.72, 9.18), 
-    "Sousse": (35.82, 10.60), "Monastir": (35.76, 10.81),
-    "Kairouan": (35.67, 10.09), "Kebili": (33.70, 8.97), 
+    "Tunis": (36.80, 10.18), 
+    "Nabeul": (36.45, 10.73), 
+    "Bizerte": (37.27, 9.87), 
+    "Beja": (36.72, 9.18), 
+    "Sousse": (35.82, 10.60), 
+    "Monastir": (35.76, 10.81),
+    "Kairouan": (35.67, 10.09), 
+    "Kebili": (33.70, 8.97), 
     "Gabes": (33.88, 10.09)
 }
 
@@ -38,13 +43,16 @@ def get_weather(reg, m):
     p = {
         "parameters": "T2M,PRECTOTCORR,RH2M,WS2M", 
         "community": "AG", 
-        "longitude": lon, "latitude": lat, 
-        "start": "2025", "end": "2025", 
+        "longitude": lon, 
+        "latitude": lat, 
+        "start": "2025", 
+        "end": "2025", 
         "format": "JSON"
     }
     try:
         r = requests.get(url, params=p, timeout=8)
-        if r.status_code != 200: return [24.5, 12.0, 60.0, 4.0]
+        if r.status_code != 200: 
+            return [24.5, 12.0, 60.0, 4.0]
         d = r.json()["properties"]["parameter"]
         k = f"2025{m:02d}"
         return [
@@ -57,7 +65,7 @@ def get_weather(reg, m):
         return [24.5, 12.0, 60.0, 4.0]
 
 # ====================================
-# 3. INTERFACE UTILISATEUR COMPACTE
+# 3. INTERFACE UTILISATEUR
 # ====================================
 st.title("🌾 Assurance Agricole Paramétrique")
 
@@ -73,10 +81,14 @@ with col1:
     sup = st.number_input("Superficie (Ha)", min_value=1, value=15)
     prod = st.number_input("Rendement (T)", min_value=1, value=60)
     
-    if mois in [12, 1, 2]: saison = "Hiver"
-    elif mois in [3, 4, 5]: saison = "Printemps"
-    elif mois in [6, 7, 8]: saison = "Ete"
-    else: saison = "Automne"
+    if mois in [12, 1, 2]: 
+        saison = "Hiver"
+    elif mois in [3, 4, 5]: 
+        saison = "Printemps"
+    elif mois in [6, 7, 8]: 
+        saison = "Ete"
+    else: 
+        saison = "Automne"
     
     btn = st.button(
         "🚀 ANALYSER", 
@@ -94,11 +106,12 @@ with col2:
         st.info(f"Temp: {t:.2f}°C | Pluie: {pl:.2f}mm")
     
     if btn:
-        # --- 1. SCORE MACHINE LEARNING ---
+        # --- 1. CALCUL DU MACHINE LEARNING (LIGNES ULTRA-COURTES) ---
         risque_ml = 20.0
         if model_charge:
             try:
-                X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
+                cols = model_rf.feature_names_in_
+                X = pd.DataFrame(0, index=[0], columns=cols)
                 X["temp"] = t
                 X["précipitations"] = pl
                 X["humidité"] = hum
@@ -106,7 +119,40 @@ with col2:
                 X["mois"] = mois
                 X["annee"] = 2025
                 
-                col_reg = f"region_{region}"
-                col_sais = f"saison_{saison}"
-                if col_reg in X.columns: X[col_reg] = 1
-                if col_sais in X.columns: X
+                c_reg = f"region_{region}"
+                c_sais = f"saison_{saison}"
+                
+                if c_reg in X.columns: 
+                    X[c_reg] = 1
+                if c_sais in X.columns: 
+                    X[c_sais] = 1
+                
+                prob = model_rf.predict_proba(X)[0][1]
+                risque_ml = prob * 100
+            except: 
+                risque_ml = max(10.0, min(90.0, t * 2.2))
+        else:
+            risque_ml = max(10.0, min(90.0, t * 2.2))
+
+        # --- 2. RÈGLES MÉTIER AGRONOMIQUES ---
+        r_regle = 10
+        if pl < 35: 
+            r_regle += max(0, int((35 - pl) * 2.0))
+        if t > 30: 
+            r_regle += max(0, int((t - 30) * 3.5))
+        if irrigation == "Non": 
+            r_regle += 15
+        
+        # --- 3. COMBINAISON ET AFFICHAGE ---
+        risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
+        prime = (risque * 4.2) + (sup * 12) + (prod * 1.1)
+        
+        with t2:
+            st.markdown("### Tarification")
+            st.metric("🔥 Risque Global", f"{risque:.2f} %")
+            st.metric("💳 Prime Calculée", f"{prime:.2f} DT")
+            st.progress(int(risque))
+            
+            with st.expander("📝 Formule"):
+                st.write("ML (70%) + Expert (30%).")
+                st.latex(r"Prime = (Risque \times 4.2) + (Sup \times 12)
