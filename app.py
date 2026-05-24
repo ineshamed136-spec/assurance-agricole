@@ -99,29 +99,4 @@ with col1:
 with col2:
     w = get_weather(region, mois)
     t, pl, hum, vent = w[0], w[1], w[2], w[3]
-    t1, t2, t3 = st.tabs(["🌦️ Météo", "📉 Risque", "🛡️ Indemnité"])
-    
-    with t1:
-        st.write(f"**Région :** {region} | **Saison :** {saison}")
-        st.info(f"Temp: {t:.2f}°C | Pluie: {pl:.2f}mm")
-    
-    if btn:
-        # --- 1. CALCUL DU MACHINE LEARNING ---
-        risque_ml = 20.0
-        if model_charge:
-            try:
-                cols = model_rf.feature_names_in_
-                X = pd.DataFrame(0, index=[0], columns=cols)
-                X["temp"] = t
-                X["précipitations"] = pl
-                X["humidité"] = hum
-                X["vent"] = vent
-                X["mois"] = mois
-                X["annee"] = 2025
-                
-                c_reg = f"region_{region}"
-                c_sais = f"saison_{saison}"
-                
-                if c_reg in X.columns: 
-                    X[c_reg] = 1
-                if c_sais
+    t1, t2, t3 = st.tabs(
