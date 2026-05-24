@@ -16,7 +16,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. CHARGEMENT SÉCURISÉ DU MODÈLE ML
+# 2. CHARGEMENT DU MODELE ML
 # ==========================================
 @st.cache_resource
 def load_model():
@@ -26,7 +26,7 @@ def load_model():
 model_rf, model_charge = load_model()
 
 # ==========================================
-# 3. NOTIFICATION TELEGRAM
+# 3. CONFIGURATION DES DONNÉES & SÉCURITÉS
 # ==========================================
 BOT_TOKEN = st.secrets.get("BOT_TOKEN", "")
 CHAT_ID = st.secrets.get("CHAT_ID", "")
@@ -43,9 +43,12 @@ coords = {
     "Kairouan": (35.67, 10.09), "Kebili": (33.70, 8.97), "Gabes": (33.88, 10.09), "Medenine": (33.35, 10.50)
 }
 
-# ==========================================
-# 4. COLLECTE DES DONNÉES CLIMATIQUES (NASA)
-# ==========================================
+# Extraction des listes à plat pour éviter les fonctions imbriquées dans l'interface
+liste_regions = list(coords.keys())
+liste_cultures = ["Olives", "Céréales"]
+liste_options_irrigation = ["Oui", "Non"]
+liste_mois = list(range(1, 13))
+
 @st.cache_data(ttl=3600)
 def get_weather(region, mois, annee=2025):
     lat, lon = coords[region]
@@ -60,7 +63,7 @@ def get_weather(region, mois, annee=2025):
     except: return 24.5, 12.0, 60.0, 4.0
 
 # ==========================================
-# 5. STRUCTURE DE L'INTERFACE UTILISATEUR
+# 4. ARCHITECTURE DE L'INTERFACE
 # ==========================================
 st.title("🌾 Système Décisionnel d'Assurance Agricole Paramétrique")
 
@@ -70,8 +73,18 @@ else: st.sidebar.warning("⚠️ Mode Hybride Actif (Calcul basé sur les règle
 st.markdown("---")
 col_formulaire, col_dashboard = st.columns([1, 1.3], gap="medium")
 
+# --- BLOC DE GAUCHE : FORMULAIRE PROTÉGÉ ---
 with col_formulaire:
     st.subheader("📋 Paramètres du Contrat")
     c1, c2 = st.columns(2)
     user_id = c1.text_input("🆔 ID Exploitant", value="TUN-NABEUL-01")
-    region = c2.selectbox("📍 Région d'analyse", list(
+    region = c2.selectbox("📍 Région d'analyse", liste_regions, index=1)
+    
+    c3, c4 = st.columns(2)
+    culture = c3.selectbox("🌱 Culture", liste_cultures)
+    irrigation = c4.radio("💧 Irrigation artificielle", liste_options_irrigation, horizontal=True)
+
+    c5, c6, c7 = st.columns(3)
+    mois = c5.selectbox("📅 Mois d'analyse", liste_mois, index=4)
+    superficie = c6.number_input("📏 Superficie (Ha)", min_value=1, value=15)
+    production = c7.number_input("🚜 Rendement attendu (T)", min_value=1, value
