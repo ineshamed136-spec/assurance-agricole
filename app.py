@@ -51,7 +51,6 @@ with col1:
     btn = st.button("🚀 CALCULER", type="primary")
 
 with col2:
-    # Données Météo NASA affichées
     t, pl, hum, vent = get_weather(region, mois)
     st.subheader("📊 Données Climatiques (Source: NASA Power)")
     m1, m2, m3, m4 = st.columns(4)
@@ -83,4 +82,11 @@ with col2:
         st.divider()
         c1, c2 = st.columns(2)
         c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
-        c2.metric("💳 Prime à payer", f"{prime:.
+        c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
+        st.error(f"💰 Indemnité estimée : {ind:.2f} DT")
+
+        with st.expander("ℹ️ Explications des calculs"):
+            st.write("**Prime à payer :**")
+            st.write("Elle est calculée selon le risque IA pondéré par la superficie et la valeur totale de la production : (Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1).")
+            st.write("**Indemnité estimée :**")
+            st.write("Basée sur un indice paramétrique : si les précipitations sont inférieures à 35mm, un remboursement est calculé proportionnellement au déficit hydrique par rapport au capital maximal assuré.")
