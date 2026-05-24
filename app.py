@@ -5,12 +5,41 @@ import requests
 
 st.set_page_config(page_title="Assurance", layout="wide")
 
+# ====================================
+# 1. CHARGEMENT DU MODELE
+# ====================================
 @st.cache_resource
 def load_model():
     try: return joblib.load("model_rf.pkl"), True
     except: return None, False
 model_rf, model_charge = load_model()
 
+# ====================================
+# 2. FONCTION DE PREDICTION ML SECURISEE
+# ====================================
+def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
+    if not model_charge:
+        return 20.0
+    try:
+        cm = model_rf.feature_names_in_
+        X = pd.DataFrame(0, index=[0], columns=cm)
+        X["temp"] = t
+        X["précipitations"] = pl
+        X["humidité"] = hum
+        X["vent"] = vent
+        X["mois"] = mois
+        X["annee"] = 2025
+        if f"region_{reg}" in X.columns: 
+            X[f"region_{reg}"] = 1
+        if f"saison_{sais}" in X.columns: 
+            X[f"saison_{sais}"] = 1
+        return float(model_rf.predict_proba(X)[0][1] * 100)
+    except:
+        return 20.0
+
+# ====================================
+# 3. COORDONNEES & METEO
+# ====================================
 coords = {
     "Tunis": (36.80, 10.18), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87),
     "Beja": (36.72, 9.18), "Sousse": (35.82, 10.60), "Monastir": (35.76, 10.81),
@@ -30,6 +59,9 @@ def get_weather(reg, m):
         return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
     except: return [24.5, 12.0, 60.0, 4.0]
 
+# ====================================
+# 4. INTERFACE GRAPHIQUE
+# ====================================
 st.title("🌾 Assurance Agricole Paramétrique")
 if model_charge: st.sidebar.success("ML Actif")
 else: st.sidebar.warning("Mode Regles Metiers")
@@ -44,23 +76,4 @@ with col1:
     mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=7)
     sup = st.number_input("Superficie (Ha)", min_value=1, value=15)
     prod = st.number_input("Rendement (T)", min_value=1, value=60)
-    saison = "Hiver" if mois in [12,1,2] else "Printemps" if mois in [3,4,5] else "Ete" if mois in [6,7,8] else "Automne"
-    btn = st.button("🚀 ANALYSER", use_container_width=True, type="primary")
-
-with col2:
-    w = get_weather(region, mois)
-    t, pl, hum, vent = w[0], w[1], w[2], w[3]
-    t1, t2, t3 = st.tabs(["🌦️ Meteo", "📉 Risque & Prime", "🛡️ Indemnite"])
-    
-    with t1:
-        st.write(f"**Region :** {region} | **Saison :** {saison}")
-        st.info(f"🌡️ Temp: {t:.2f} °C | 🌧️ Pluie: {pl:.2f} mm | 💧 Hum: {hum:.2f} % | 💨 Vent: {vent:.2f} m/s")
-    
-    if btn:
-        risque_ml = 20.0
-        if model_charge:
-            try:
-                X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
-                X["temp"], X["précipitations"], X["humidité"], X["vent"], X["mois"], X["annee"] = t, pl, hum, vent, mois, 2025
-                if f"region_{region}" in X.columns: X[f"region_{region}"] = 1
-                if f"saison_{saison}" in X.columns: X
+    saison = "Hiver" if mois in [12,1,2] else "Printemps" if mois
