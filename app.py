@@ -32,6 +32,7 @@ col1, col2 = st.columns([1, 2])
 with col1:
     region = st.selectbox("Région", list(coords.keys()))
     culture = st.selectbox("Culture", ["Olives", "Céréales", "Agrumes"])
+    irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
     mois = st.selectbox("Mois", list(range(1, 13)), index=4)
     sup = st.number_input("Superficie (Ha)", value=15.0)
     prod = st.number_input("Rendement attendu (T/Ha)", value=4.0)
@@ -56,6 +57,9 @@ with col2:
                 risque = model_rf.predict_proba(X)[0][1] * 100
             except: pass
 
+        # Ajout impact irrigation au risque
+        if irrigation == "Non": risque += 10 
+        
         prod_totale = sup * prod
         prime = (risque * 4.2) + (sup * 12) + (prod_totale * 1.1)
         cap_max = (sup * 200) + (prod_totale * 25)
@@ -67,8 +71,7 @@ with col2:
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         st.error(f"💰 Indemnité estimée : {ind:.2f} DT")
 
-        # Remplacé par des commandes simples pour éviter les erreurs de syntaxe
         with st.expander("ℹ️ Comprendre les formules"):
-            st.write("1. Prime = (Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1)")
-            st.write("2. Indemnité = ((35 - Pluie) / 27) * Capital_Max")
-            st.write("Ces formules utilisent les indices météo pour déclencher le remboursement automatiquement.")
+            st.write("1. **Prime** = (Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1)")
+            st.write("2. **Indemnité** = ((35 - Pluie) / 27) * Capital_Max")
+            st.write("L'irrigation réduit le stress hydrique, donc le modèle ajuste le risque en conséquence.")
