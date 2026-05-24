@@ -88,4 +88,8 @@ with col1:
     else:
         saison = "Automne"
 
-    btn = st.button("🚀 ANALYSER", use_container_width=True, type="
+    # Ligne ultra-courte pour éviter toute coupure
+    btn = st.button("🚀 ANALYSER")
+
+with col2:
+    w = get_weather(
