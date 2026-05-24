@@ -1,41 +1,27 @@
 import streamlit as st
 import joblib
 import pandas as pd
-import numpy as np
 import requests
-import os
 
-# ==================================
-# CONFIG
-# ==================================
 st.set_page_config(
-    page_title="Assurance Agricole",
+    page_title="Assurance",
     layout="wide"
 )
 
 # ==================================
-# CHARGEMENT MODELE (ROBUSTE)
+# 1. CHARGEMENT DU MODELE ML
 # ==================================
 @st.cache_resource
 def load_model():
-    model_path = os.path.join(os.path.dirname(__file__), "model.pkl")
-
-    if os.path.exists(model_path):
-        model = joblib.load(model_path)
-        return model, True
-    else:
+    try:
+        # Correction ici : chargement explicite de model.pkl
+        m = joblib.load("model.pkl")
+        return m, True
+    except:
         return None, False
 
 model_rf, model_charge = load_model()
 
-st.title("🌾 Assurance Agricole - Prédiction Sinistres")
-
-# DEBUG (utile pour Streamlit Cloud)
-st.write("📂 Fichiers disponibles :", os.listdir())
-
-# ==================================
-# DONNÉES RÉGION
-# ==================================
 coords = {
     "Tunis": (36.80, 10.18),
     "Nabeul": (36.45, 10.73),
@@ -49,15 +35,16 @@ coords = {
 }
 
 # ==================================
-# MÉTÉO NASA (SAFE)
+# 2. COLLECTE DES DONNEES (NASA)
 # ==================================
 @st.cache_data(ttl=3600)
-def get_weather(region, month):
-    lat, lon = coords[region]
-
-    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
-
-    params = {
+def get_weather(reg, m):
+    lat, lon = coords[reg]
+    url = (
+        "https://power.larc.nasa.gov"
+        "/api/temporal/monthly/point"
+    )
+    p = {
         "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
         "community": "AG",
         "longitude": lon,
@@ -66,114 +53,227 @@ def get_weather(region, month):
         "end": "2025",
         "format": "JSON"
     }
-
     try:
-        r = requests.get(url, params=params, timeout=8)
-
+        r = requests.get(
+            url,
+            params=p,
+            timeout=8
+        )
         if r.status_code != 200:
-            return [25, 10, 60, 4]
-
-        data = r.json()["properties"]["parameter"]
-        key = f"2025{month:02d}"
-
-        return [
-            float(data["T2M"][key]),
-            float(data["PRECTOTCORR"][key]),
-            float(data["RH2M"][key]),
-            float(data["WS2M"][key])
-        ]
-
+            return [24.5, 12.0, 60.0, 4.0]
+        res = r.json()
+        d = res["properties"]["parameter"]
+        k = f"2025{m:02d}"
+        v_t = float(d["T2M"][k])
+        v_p = float(d["PRECTOTCORR"][k])
+        v_h = float(d["RH2M"][k])
+        v_w = float(d["WS2M"][k])
+        return [v_t, v_p, v_h, v_w]
     except:
-        return [25, 10, 60, 4]
+        return [24.5, 12.0, 60.0, 4.0]
 
 # ==================================
-# UI
+# 3. INTERFACE UTILISATEUR
 # ==================================
-col1, col2 = st.columns(2)
+st.title("🌾 Assurance Agricole")
+
+col1, col2 = st.columns(
+    [1, 1.2],
+    gap="medium"
+)
 
 with col1:
-    st.subheader("📋 Paramètres")
+    st.subheader("Contrat")
+    uid = st.text_input(
+        "ID Exploitant",
+        value="TUN-01"
+    )
+    region = st.selectbox(
+        "Region",
+        list(coords.keys()),
+        index=1
+    )
+    culture = st.selectbox(
+        "Culture",
+        ["Olives", "Cereales"]
+    )
+    irrigation = st.radio(
+        "Irrigation",
+        ["Oui", "Non"],
+        horizontal=True
+    )
+    mois = st.selectbox(
+        "Mois (1-12)",
+        list(range(1, 13)),
+        index=4
+    )
+    sup = st.number_input(
+        "Superficie (Ha)",
+        min_value=1,
+        value=15
+    )
+    prod = st.number_input(
+        "Rendement (T)",
+        min_value=1,
+        value=60
+    )
 
-    region = st.selectbox("Région", list(coords.keys()))
-    culture = st.selectbox("Culture", ["Olives", "Céréales"])
-    irrigation = st.radio("Irrigation", ["Oui", "Non"])
-    mois = st.selectbox("Mois", list(range(1, 13)))
-    sup = st.number_input("Superficie (Ha)", 1, 100, 10)
-    prod = st.number_input("Production (T)", 1, 200, 50)
-
-    btn = st.button("🚀 Analyser", use_container_width=True)
-
-# ==================================
-# MÉTÉO
-# ==================================
-t, pl, hum, vent = get_weather(region, mois)
-
-# ==================================
-# ANALYSE
-# ==================================
-if btn:
-
-    # ---------------- ML ----------------
-    if model_charge and model_rf is not None:
-        try:
-            proba = model_rf.predict_proba(
-                np.array([[t, pl, hum, vent, mois]])
-            )[0][1]
-
-            risk_ml = proba * 100
-
-        except:
-            risk_ml = min(90, max(10, t * 2))
+    if mois in [12, 1, 2]:
+        saison = "Hiver"
+    elif mois in [3, 4, 5]:
+        saison = "Printemps"
+    elif mois in [6, 7, 8]:
+        saison = "Ete"
     else:
-        risk_ml = min(90, max(10, t * 2))
+        saison = "Automne"
 
-    # ---------------- RULES ----------------
-    risk_rule = 10
+    btn = st.button(
+        "🚀 ANALYSER",
+        use_container_width=True,
+        type="primary"
+    )
 
-    if pl < 35:
-        risk_rule += (35 - pl) * 2
-    if t > 30:
-        risk_rule += (t - 30) * 3
-    if irrigation == "Non":
-        risk_rule += 15
+with col2:
+    w = get_weather(region, mois)
+    t, pl, hum, vent = w[0], w[1], w[2], w[3]
 
-    # ---------------- FUSION ----------------
-    risk = 0.7 * risk_ml + 0.3 * risk_rule
-    risk = max(0, min(100, risk))
+    tabs = ["🌦️ Météo", "📉 Risque", "🛡️ Payout"]
+    t1, t2, t3 = st.tabs(tabs)
 
-    # ---------------- PRIME ----------------
-    prime = (risk * 4.2) + (sup * 12) + (prod * 1.1)
+    with t1:
+        st.write(f"**Région :** {region}")
+        st.write(f"**Saison :** {saison}")
+        st.info(f"🌡️ Température : {t:.1f}°C")
+        st.info(f"🌧️ Pluviométrie : {pl:.1f} mm")
+        st.info(f"💧 Humidité : {hum:.1f} %")
+        st.info(f"💨 Vitesse Vent : {vent:.1f} m/s")
 
-    # ==================================
-    # RESULTATS
-    # ==================================
-    with col2:
-
-        st.subheader("📊 Résultats")
-
+    if btn:
+        # --- MOTEUR 1 : MACHINE LEARNING ---
+        risque_ml = 20.0
         if model_charge:
-            st.success("✔ Modèle chargé avec succès")
+            try:
+                f_in = model_rf.feature_names_in_
+                X = pd.DataFrame(
+                    0,
+                    index=[0],
+                    columns=f_in
+                )
+                X["temp"] = t
+                X["précipitations"] = pl
+                X["humidité"] = hum
+                X["vent"] = vent
+                X["mois"] = mois
+                X["annee"] = 2025
+
+                c_reg = f"region_{region}"
+                c_sais = f"saison_{saison}"
+
+                if c_reg in X.columns:
+                    X[c_reg] = 1
+                if c_sais in X.columns:
+                    X[c_sais] = 1
+
+                p = model_rf.predict_proba(X)
+                risque_ml = p[0][1] * 100
+            except:
+                calc = t * 2.2
+                risque_ml = max(10.0, min(90.0, calc))
         else:
-            st.warning("⚠ Modèle non trouvé (mode fallback)")
+            calc = t * 2.2
+            risque_ml = max(10.0, min(90.0, calc))
 
-        st.metric("Risque ML", f"{risk_ml:.1f}%")
-        st.metric("Risque Global", f"{risk:.1f}%")
-        st.metric("Prime", f"{prime:.1f} DT")
-
-        st.progress(int(risk))
-
-        st.write("### 🌦️ Données météo")
-        st.write(f"Température : {t:.1f} °C")
-        st.write(f"Pluie : {pl:.1f} mm")
-        st.write(f"Humidité : {hum:.1f} %")
-        st.write(f"Vent : {vent:.1f} m/s")
-
-        # Indemnité simple
-        cap = sup * 200 + prod * 25
-        indemnity = 0
-
+        # --- MOTEUR 2 : REGLES DE METIER ---
+        r_regle = 10
         if pl < 35:
-            indemnity = ((35 - pl) / 35) * cap
+            r_regle += int((35 - pl) * 2.0)
+        if t > 30:
+            r_regle += int((t - 30) * 3.5)
+        if irrigation == "Non":
+            r_regle += 15
 
-        st.write("### 💰 Indemnité")
-        st.write(f"{indemnity:.1f} DT")
+        # --- FUSION DES DEUX MOTEURS (70% ML / 30% Métier) ---
+        v1 = 0.7 * risque_ml
+        v2 = 0.3 * r_regle
+        risque = max(0, min(100, v1 + v2))
+        
+        # Tarification Actuarielle
+        p1 = risque * 4.2
+        p2 = sup * 12
+        p3 = prod * 1.1
+        prime = p1 + p2 + p3
+
+        with t2:
+            st.markdown("### Évaluation Hybride")
+            if model_charge:
+                st.success("🤖 Modèle model.pkl chargé !")
+            else:
+                st.warning("⚠️ Fichier model.pkl introuvable")
+                
+            st.write(f"📊 Risque ML pur : {risque_ml:.1f}%")
+            st.write(f"📜 Risque Métier pur : {r_regle:.1f}%")
+            st.divider()
+            st.metric(
+                "🔥 Taux Global Fusionné",
+                f"{risque:.1f} %"
+            )
+            st.metric(
+                "💳 Prime Finale",
+                f"{prime:.1f} DT"
+            )
+            st.progress(int(risque))
+
+        with t3:
+            st.markdown("### Indemnité")
+            c1 = sup * 200
+            c2 = prod * 25
+            cap_max = c1 + c2
+            ind = 0.0
+            peril = "Normal"
+
+            if pl < 35.0:
+                peril = "Sécheresse"
+                if pl <= 8.0:
+                    p_rate = 1.0
+                else:
+                    p_rate = (35.0 - pl) / 27.0
+                ind = p_rate * cap_max
+            elif t > 39.0:
+                peril = "Canicule"
+                if t >= 47.0:
+                    p_rate = 1.0
+                else:
+                    p_rate = (t - 39.0) / 8.0
+                ind = p_rate * cap_max
+
+            if ind > 0:
+                st.error(
+                    f"💰 {ind:.1f} DT ({peril})"
+                )
+            else:
+                st.success("💰 0.00 DT")
+
+            # --- MODULE TELEGRAM ---
+            tok = st.secrets.get("BOT_TOKEN", "")
+            cid = st.secrets.get("CHAT_ID", "")
+            if tok and cid:
+                tg = (
+                    f"https://api.telegram.org"
+                    f"/bot{tok}/sendMessage"
+                )
+                txt = (
+                    f"🌾 {uid} | "
+                    f"Risque: {risque:.1f}%"
+                )
+                pay = {
+                    "chat_id": cid,
+                    "text": txt
+                }
+                try:
+                    requests.post(
+                        tg,
+                        data=pay,
+                        timeout=3
+                    )
+                except:
+                    pass
