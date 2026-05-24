@@ -34,10 +34,6 @@ st.title("🌾 Assurance Agricole Paramétrique")
 if model_charge: st.sidebar.success("ML Actif")
 else: st.sidebar.warning("Mode Regles Metiers")
 
-# Initialisation de la mémoire du bouton pour éviter les bugs d'affichage
-if "running" not in st.session_state:
-    st.session_state.running = False
-
 col1, col2 = st.columns([1, 1.2], gap="medium")
 with col1:
     st.subheader("Contrat")
@@ -49,9 +45,7 @@ with col1:
     sup = st.number_input("Superficie (Ha)", min_value=1, value=15)
     prod = st.number_input("Rendement (T)", min_value=1, value=60)
     saison = "Hiver" if mois in [12,1,2] else "Printemps" if mois in [3,4,5] else "Ete" if mois in [6,7,8] else "Automne"
-    
-    if st.button("🚀 ANALYSER", use_container_width=True, type="primary"):
-        st.session_state.running = True
+    btn = st.button("🚀 ANALYSER", use_container_width=True, type="primary")
 
 with col2:
     w = get_weather(region, mois)
@@ -62,8 +56,8 @@ with col2:
         st.write(f"**Region :** {region} | **Saison :** {saison}")
         st.info(f"🌡️ Temp: {t:.2f} °C | 🌧️ Pluie: {pl:.2f} mm | 💧 Hum: {hum:.2f} % | 💨 Vent: {vent:.2f} m/s")
     
-    # Les onglets lisent la mémoire du bouton pour afficher les calculs
-    if st.session_state.running:
+    # Calculs automatiques lancés si le bouton ANALYSER est cliqué
+    if btn:
         risque_ml = 20.0
         if model_charge:
             try:
@@ -76,4 +70,37 @@ with col2:
 
         r_regle = 10
         if pl < 15: r_regle += 35
-        if t
+        if t > 38: r_regle += 25
+        if irrigation == "Non": r_regle += 15
+        
+        risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
+        prime = (risque * 4.2) + (sup * 12) + (prod * 1.1)
+        
+        with t2:
+            st.markdown("### Estimation Actuarielle")
+            st.metric("🔥 Taux de Risque Global", f"{risque:.2f} %")
+            st.metric("💳 Prime Pure Calculee", f"{prime:.2f} DT")
+            st.progress(int(risque))
+            
+        with t3:
+            st.markdown("### Calcul de l'Indemnité")
+            cap_max = (sup * 200) + (prod * 25)
+            ind, peril = 0.0, "Conditions Normales"
+            
+            if pl < 35.0:
+                peril = "Secheresse"
+                p_rate = 1.0 if pl <= 8.0 else (35.0 - pl) / (35.0 - 8.0)
+                ind = p_rate * cap_max
+            elif t > 39.0:
+                peril = "Canicule"
+                p_rate = 1.0 if t >= 47.0 else (t - 39.0) / (47.0 - 39.0)
+                ind = p_rate * cap_max
+            
+            if ind > 0: st.error(f"💰 Indemnite Declenchee : {ind:.2f} DT ({peril})")
+            else: st.success("🍏 Indemnite Calculee : 0.00 DT (Aucun seuil franchi)")
+            
+            tok, cid = st.secrets.get("BOT_TOKEN", ""), st.secrets.get("CHAT_ID", "")
+            if tok and cid:
+                txt = f"🌾 ASSURANCE\n👤 ID: {uid}\n📈 Risque: {risque:.2f}%\n💰 Indemnite: {ind:.2f} DT"
+                try: requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": cid, "text": txt}, timeout=3)
+                except: pass
