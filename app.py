@@ -2,6 +2,7 @@ import streamlit as st
 import joblib
 import pandas as pd
 import requests
+import os
 
 st.set_page_config(
     page_title="Assurance",
@@ -14,8 +15,13 @@ st.set_page_config(
 @st.cache_resource
 def load_model():
     try:
-        # Correction ici : chargement explicite de model.pkl
-        m = joblib.load("model.pkl")
+        # Trouve le dossier exact où est enregistré app.py
+        dossier_actuel = os.path.dirname(__file__)
+        # Crée le chemin complet et absolu vers model.pkl
+        chemin_modele = os.path.join(dossier_actuel, "model.pkl")
+        
+        # Charge le modèle avec son chemin sécurisé
+        m = joblib.load(chemin_modele)
         return m, True
     except:
         return None, False
@@ -206,74 +212,6 @@ with col2:
         with t2:
             st.markdown("### Évaluation Hybride")
             if model_charge:
-                st.success("🤖 Modèle model.pkl chargé !")
+                st.success("🤖 Modèle model.pkl chargé avec succès !")
             else:
-                st.warning("⚠️ Fichier model.pkl introuvable")
-                
-            st.write(f"📊 Risque ML pur : {risque_ml:.1f}%")
-            st.write(f"📜 Risque Métier pur : {r_regle:.1f}%")
-            st.divider()
-            st.metric(
-                "🔥 Taux Global Fusionné",
-                f"{risque:.1f} %"
-            )
-            st.metric(
-                "💳 Prime Finale",
-                f"{prime:.1f} DT"
-            )
-            st.progress(int(risque))
-
-        with t3:
-            st.markdown("### Indemnité")
-            c1 = sup * 200
-            c2 = prod * 25
-            cap_max = c1 + c2
-            ind = 0.0
-            peril = "Normal"
-
-            if pl < 35.0:
-                peril = "Sécheresse"
-                if pl <= 8.0:
-                    p_rate = 1.0
-                else:
-                    p_rate = (35.0 - pl) / 27.0
-                ind = p_rate * cap_max
-            elif t > 39.0:
-                peril = "Canicule"
-                if t >= 47.0:
-                    p_rate = 1.0
-                else:
-                    p_rate = (t - 39.0) / 8.0
-                ind = p_rate * cap_max
-
-            if ind > 0:
-                st.error(
-                    f"💰 {ind:.1f} DT ({peril})"
-                )
-            else:
-                st.success("💰 0.00 DT")
-
-            # --- MODULE TELEGRAM ---
-            tok = st.secrets.get("BOT_TOKEN", "")
-            cid = st.secrets.get("CHAT_ID", "")
-            if tok and cid:
-                tg = (
-                    f"https://api.telegram.org"
-                    f"/bot{tok}/sendMessage"
-                )
-                txt = (
-                    f"🌾 {uid} | "
-                    f"Risque: {risque:.1f}%"
-                )
-                pay = {
-                    "chat_id": cid,
-                    "text": txt
-                }
-                try:
-                    requests.post(
-                        tg,
-                        data=pay,
-                        timeout=3
-                    )
-                except:
-                    pass
+                st.warning("⚠️ F
