@@ -69,78 +69,16 @@ with col2:
         st.info(f"🌡️ Temp: {t:.2f} °C | 🌧️ Pluie: {pl:.2f} mm | 💧 Hum: {hum:.2f} % | 💨 Vent: {vent:.2f} m/s")
     
     if btn:
-        # --- Calcul du score Machine Learning ---
+        # --- 1. CALCUL DU SCORE PREDICTIF (MACHINE LEARNING) ---
         risque_ml = 20.0
         if model_charge:
             try:
                 X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
                 X["temp"], X["précipitations"], X["humidité"], X["vent"], X["mois"], X["annee"] = t, pl, hum, vent, mois, 2025
-                if f"region_{region}" in X.columns: X[f"region_{region}"] = 1
-                if f"saison_{saison}" in X.columns: X[f"saison_{saison}"] = 1
-                risque_ml = model_rf.predict_proba(X)[0][1] * 100
-            except: 
-                risque_ml = 20.0
-
-        # --- Calcul des Règles Métier Agronomiques (Syntaxe Corrigée avec ':') ---
-        r_regle = 10
-        if pl < 15: 
-            r_regle += 35
-        if t > 38: 
-            r_regle += 25
-        if irrigation == "Non": 
-            r_regle += 15
-        
-        # --- Indice de Risque Global Combiné ---
-        risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
-        prime = (risque * 4.2) + (sup * 12) + (prod * 1.1)
-        
-        with t2:
-            st.markdown("### Analyse & Tarification Actuarielle")
-            st.metric("🔥 Taux de Risque Global", f"{risque:.2f} %")
-            st.metric("💳 Prime Pure Calculée", f"{prime:.2f} DT")
-            st.progress(int(risque))
-            
-            with st.expander("📝 Modèle de Tarification (Explication)"):
-                st.markdown("**Méthodologie de Calcul :**")
-                st.write("Le taux de risque intègre les probabilités statistiques historiques calculées par le modèle prédictif ainsi que les facteurs de vulnérabilité agronomiques aux champs (stress hydrique, absence d'irrigation).")
-                st.markdown("**Formule de la Prime Globale :**")
-                st.latex(r"Prime = \left( \text{Risque} \times 4.2 \right) + \left( \text{Superficie} \times 12 \right) + \left( \text{Rendement} \times 1.1 \right)")
-                st.caption("Le coefficient de chargement (4.2) assure la marge de sécurité face à l'incertitude climatique.")
                 
-        with t3:
-            st.markdown("### Déclenchement Paramétrique Automatique")
-            cap_max = (sup * 200) + (prod * 25)
-            ind, peril = 0.0, "Conditions Normales"
-            
-            # Application des index physiques linéaires
-            if pl < 35.0:
-                peril = "Sécheresse"
-                p_rate = 1.0 if pl <= 8.0 else (35.0 - pl) / (35.0 - 8.0)
-                ind = p_rate * cap_max
-            elif t > 39.0:
-                peril = "Canicule"
-                p_rate = 1.0 if t >= 47.0 else (t - 39.0) / (47.0 - 39.0)
-                ind = p_rate * cap_max
-            
-            if ind > 0: 
-                st.error(f"💰 Indemnité Déclenchée : {ind:.2f} DT")
-            else: 
-                st.success("Indemnité Calculée : 0.00 DT")
+                col_reg = f"region_{region}"
+                col_sais = f"saison_{saison}"
+                if col_reg in X.columns: X[col_reg] = 1
+                if col_sais in X.columns: X[col_sais] = 1
                 
-            with st.expander("📊 Index Géophysiques Limites"):
-                st.markdown("**1. Plafond des Capitaux Assurés :**")
-                st.latex(r"Capital_{Max} = (\text{Superficie} \times 200) + (\text{Rendement} \times 25)")
-                
-                st.markdown("**2. Règle de calcul de l'Indemnité Proportionnelle :**")
-                st.latex(r"Indemnité = \text{Taux de Perte} \times Capital_{Max}")
-                
-                st.markdown("**Seuils de déclenchement (Triggers) :**")
-                st.write("- **Sécheresse :** Déclenchement sous **35 mm** mensuels. Sinistre total (100%) atteint à **8 mm**.")
-                st.write("- **Canicule :** Déclenchement au-delà de **39°C**. Sinistre total (100%) atteint à **47°C**.")
-
-            # Notification Système (Optionnelle)
-            tok, cid = st.secrets.get("BOT_TOKEN", ""), st.secrets.get("CHAT_ID", "")
-            if tok and cid:
-                txt = f"🌾 ASSURANCE\n👤 ID: {uid}\n📈 Risque: {risque:.2f}%\n💰 Indemnite: {ind:.2f} DT"
-                try: requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": cid, "text": txt}, timeout=3)
-                except: pass
+                risque_ml = model_rf
