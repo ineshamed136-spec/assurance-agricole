@@ -4,15 +4,15 @@ import pandas as pd
 import requests
 
 # ==========================================
-# 1. CONFIGURATION DE LA PAGE (Dashboard)
+# 1. CONFIGURATION DE LA PAGE (Dashboard Wide)
 # ==========================================
 st.set_page_config(
     page_title="Assurance Agricole Intelligente",
     page_icon="🌾",
-    layout="wide"  # Maximise l'espace horizontal pour éviter de descendre la page
+    layout="wide"  # Maximise l'espace horizontal pour éviter le défilement vers le bas
 )
 
-# Style CSS personnalisé pour rendre l'interface professionnelle
+# Style CSS personnalisé pour embellir l'interface
 st.markdown("""
     <style>
     .metric-box {
@@ -71,7 +71,7 @@ def envoyer_alerte(user_id, region, risque, saison, statut_indemnite):
     except:
         pass
 
-# Coordonnées géographiques de la Tunisie
+# Coordonnées géographiques des gouvernorats de la Tunisie
 coords = {
     "Tunis": (36.8065, 10.1815), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87),
     "Beja": (36.72, 9.18), "Sousse": (35.82, 10.60), "Monastir": (35.76, 10.81),
@@ -89,11 +89,6 @@ def get_weather(region, mois, annee=2025):
     params = {
         "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
         "community": "AG",
-        "longitude": lon, "latitude": lat,
-        "start": str(annee), "end": str(annee),
-        "format": "JSON"
-    }
-    try:
-        r = requests.get(url, params=params, timeout=15)
-        if r.status_code != 200: return None
-        data = r.json
+        "longitude": lon, 
+        "latitude": lat,
+        "start": str(annee),
