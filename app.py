@@ -38,12 +38,20 @@ def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
         return 20.0
 
 # ====================================
-# 3. COORDONNEES & METEO
+# 3. COORDONNEES, SAISONS & METEO
 # ====================================
 coords = {
     "Tunis": (36.80, 10.18), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87),
     "Beja": (36.72, 9.18), "Sousse": (35.82, 10.60), "Monastir": (35.76, 10.81),
     "Kairouan": (35.67, 10.09), "Kebili": (33.70, 8.97), "Gabes": (33.88, 10.09)
+}
+
+# Mapping direct pour éviter les coupures de if/else longs
+saisons_map = {
+    12: "Hiver", 1: "Hiver", 2: "Hiver",
+    3: "Printemps", 4: "Printemps", 5: "Printemps",
+    6: "Ete", 7: "Ete", 8: "Ete",
+    9: "Automne", 10: "Automne", 11: "Automne"
 }
 
 @st.cache_data(ttl=3600)
@@ -76,4 +84,86 @@ with col1:
     mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=7)
     sup = st.number_input("Superficie (Ha)", min_value=1, value=15)
     prod = st.number_input("Rendement (T)", min_value=1, value=60)
-    saison = "Hiver" if mois in [12,1,2] else "Printemps" if mois
+    
+    # Récupération de la saison via le dictionnaire sécurisé
+    saison = saisons_map.get(mois, "Ete")
+    
+    btn = st.button("🚀 ANALYSER", use_container_width=True, type="primary")
+
+with col2:
+    w = get_weather(region, mois)
+    t, pl, hum, vent = w[0], w[1], w[2], w[3]
+    t1, t2, t3 = st.tabs(["🌦️ Meteo", "📉 Risque & Prime", "🛡️ Indemnite"])
+    
+    with t1:
+        st.write(f"**Region :** {region} | **Saison :** {saison}")
+        st.info(f"🌡️ Temp: {t:.2f} °C | 🌧️ Pluie: {pl:.2f} mm | 💧 Hum: {hum:.2f} % | 💨 Vent: {vent:.2f} m/s")
+    
+    if btn:
+        risque_ml = predire_risque_ml(t, pl, hum, vent, mois, region, saison)
+
+        r_regle = 10
+        txt_regle = "Base 10%"
+        if pl < 15: 
+            r_regle += 35
+            txt_regle += " + 35% (Pluie < 15mm)"
+        if t > 38: 
+            r_regle += 25
+            txt_regle += " + 25% (Temp > 38C)"
+        if irrigation == "Non": 
+            r_regle += 15
+            txt_regle += " + 15% (Pas d'irrigation)"
+        
+        risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
+        prime_pure = risque * 4.2
+        frais_ch = (sup * 12) + (prod * 1.1)
+        prime = prime_pure + frais_ch
+        
+        with t2:
+            st.write("### Evaluation Actuarielle")
+            st.metric("🔥 Taux de Risque Global", f"{risque:.2f} %")
+            st.metric("💳 Prime Totale Facturee", f"{prime:.2f} DT")
+            st.progress(int(risque))
+            st.write(f"**Formule du Risque :** 70% ML + 30% Regles Metiers (Calcul métier : {txt_regle} = {r_regle}%)")
+            st.write(f"**Detail Prime Pure :** Risque ({risque:.2f}%) x Coeff 4.2 = {prime_pure:.2f} DT")
+            st.write(f"**Detail Chargement (Frais) :** (Sup x 12) + (Prod x 1.1) = {frais_ch:.2f} DT")
+            st.write("**Formule Prime Finale :** Prime Pure + Chargement")
+            
+        with t3:
+            st.write("### Calcul Parametrique de l'Indemnite")
+            cap_max = (sup * 200) + (prod * 25)
+            ind, p_rate, peril = 0.0, 0.0, "Normal"
+            txt_form, txt_expl = "Aucune", "Indices climatiques normaux."
+            
+            if pl < 35.0:
+                peril = "Secheresse"
+                if pl <= 8.0:
+                    p_rate, txt_form, txt_expl = 1.0, "Forfait 100%", f"Pluie ({pl:.2f} mm) <= Seuil Critique Catastrophe (8 mm)."
+                else:
+                    p_rate = (35.0 - pl) / (35.0 - 8.0)
+                    txt_form = "Taux = (Seuil Activation 35mm - Pluie) / (Seuil Activation 35mm - Seuil Critique 8mm)"
+                    txt_expl = f"Pluie ({pl:.2f} mm) en zone de perte progressive."
+                ind = p_rate * cap_max
+            elif t > 39.0:
+                peril = "Canicule"
+                if t >= 47.0:
+                    p_rate, txt_form, txt_expl = 1.0, "Forfait 100%", f"Temp ({t:.2f} C) >= Seuil Extreme (47 C)."
+                else:
+                    p_rate = (t - 39.0) / (47.0 - 39.0)
+                    txt_form = "Taux = (Temp - Seuil Activation 39C) / (Seuil Critique 47C - Seuil Activation 39C)"
+                    txt_expl = f"Temp ({t:.2f} C) en zone de stress thermique lineaire."
+                ind = p_rate * cap_max
+            
+            if ind > 0: st.error(f"💰 Indemnite Declenchee : {ind:.2f} DT (Peril : {peril})")
+            else: st.success("🍏 Indemnite Calculee : 0.00 DT (Aucun seuil franchi)")
+            
+            st.write(f"**Capital Maximum Garanti :** (Sup x 200 DT) + (Prod x 25 DT) = {cap_max:.2f} DT")
+            st.write(f"**Formule Appliquee :** {txt_form}")
+            st.write(f"**Analyse Metier :** {txt_expl}")
+            st.write("*Note PFE : Indemnisation instantanee via donnees satellites sans expertise terrain.*")
+            
+            tok, cid = st.secrets.get("BOT_TOKEN", ""), st.secrets.get("CHAT_ID", "")
+            if tok and cid:
+                txt = f"🌾 ASSURANCE\n👤 ID: {uid}\n📈 Risque: {risque:.2f}%\n💰 Indemnite: {ind:.2f} DT"
+                try: requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": cid, "text": txt}, timeout=3)
+                except: pass
