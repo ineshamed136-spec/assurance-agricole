@@ -10,8 +10,11 @@ st.set_page_config(page_title="Assurance Paramétrique", layout="wide")
 # ====================================
 @st.cache_resource
 def load_model():
-    try: return joblib.load("model_rf.pkl"), True
-    except: return None, False
+    try: 
+        return joblib.load("model_rf.pkl"), True
+    except: 
+        return None, False
+
 model_rf, model_charge = load_model()
 
 coords = {
@@ -34,7 +37,8 @@ def get_weather(reg, m):
         d = r.json()["properties"]["parameter"]
         k = f"2025{m:02d}"
         return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
-    except: return [24.5, 12.0, 60.0, 4.0]
+    except: 
+        return [24.5, 12.0, 60.0, 4.0]
 
 # ====================================
 # 3. INTERFACE DE CONTROLE COMPACTE
@@ -73,4 +77,11 @@ with col2:
                 X["temp"], X["précipitations"], X["humidité"], X["vent"], X["mois"], X["annee"] = t, pl, hum, vent, mois, 2025
                 if f"region_{region}" in X.columns: X[f"region_{region}"] = 1
                 if f"saison_{saison}" in X.columns: X[f"saison_{saison}"] = 1
-                risque_ml = model
+                risque_ml = model_rf.predict_proba(X)[0][1] * 100
+            except: 
+                risque_ml = 20.0
+
+        # --- Calcul des Règles Métier Agronomiques ---
+        r_regle = 10
+        if pl < 15: r_regle += 35
+        if
