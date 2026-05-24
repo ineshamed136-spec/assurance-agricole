@@ -77,16 +77,24 @@ with col2:
         prod_totale = sup * prod
         prime = (risque_final * 4.2) + (sup * 12) + (prod_totale * 1.1)
         cap_max = (sup * 200) + (prod_totale * 25)
-        ind = max(0, ((35.0 - pl) / 27.0) * cap_max) if pl < 35 else 0
 
         st.divider()
         c1, c2 = st.columns(2)
         c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
-        st.error(f"💰 Indemnité estimée : {ind:.2f} DT")
+        
+        # --- LOGIQUE D'INDEMNISATION AVEC SEUILS ---
+        st.divider()
+        if pl < 35:
+            ind = ((35.0 - pl) / 27.0) * cap_max
+            st.error(f"💰 Indemnité de sinistre estimée : {ind:.2f} DT")
+        else:
+            aide_soutien = 50.0
+            st.success("✅ Conditions climatiques favorables. Aucune indemnité de sinistre requise.")
+            st.info(f"💰 Aide de soutien prévue : {aide_soutien:.2f} DT")
 
         with st.expander("ℹ️ Explications des calculs"):
-            st.write("**Prime à payer :**")
-            st.write("Elle est calculée selon le risque IA pondéré par la superficie et la valeur totale de la production : (Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1).")
-            st.write("**Indemnité estimée :**")
-            st.write("Basée sur un indice paramétrique : si les précipitations sont inférieures à 35mm, un remboursement est calculé proportionnellement au déficit hydrique par rapport au capital maximal assuré.")
+            st.write("**Prime à payer :** Calculée selon le risque IA pondéré par la superficie et la valeur totale de la production : (Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1).")
+            st.write("**Indemnité / Soutien :**")
+            st.write("- Si les précipitations sont inférieures à 35mm : Indemnisation basée sur le déficit hydrique.")
+            st.write("- Si les précipitations sont suffisantes (>= 35mm) : Aide de soutien symbolique attribuée pour la bonne gestion.")
