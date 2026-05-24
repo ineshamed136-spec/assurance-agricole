@@ -14,8 +14,8 @@ st.set_page_config(
 @st.cache_resource
 def load_model():
     try:
-        # Ligne mise à jour avec le nouveau nom du fichier
-        m = joblib.load("model")
+        # Correction ici : chargement explicite de model.pkl
+        m = joblib.load("model.pkl")
         return m, True
     except:
         return None, False
@@ -205,11 +205,10 @@ with col2:
 
         with t2:
             st.markdown("### Évaluation Hybride")
-            # Petit indicateur visuel pour savoir si le modèle est bien lu
             if model_charge:
-                st.success("🤖 Modèle connecté avec succès")
+                st.success("🤖 Modèle model.pkl chargé !")
             else:
-                st.warning("⚠️ Fichier modèle introuvable, mode secours actif")
+                st.warning("⚠️ Fichier model.pkl introuvable")
                 
             st.write(f"📊 Risque ML pur : {risque_ml:.1f}%")
             st.write(f"📜 Risque Métier pur : {r_regle:.1f}%")
