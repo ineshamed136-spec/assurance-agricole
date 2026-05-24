@@ -66,4 +66,22 @@ with col2:
     
     with t1:
         st.write(f"**Région :** {region} | **Saison :** {saison}")
-        st.info(f"🌡️ Temp: {t:.2f} °C | 🌧️ Pluie: {pl:.2f} mm | 💧 Hum: {hum:.2f} % | 💨 Vent: {vent:.2f} m/
+        # La ligne ci-dessous a été corrigée et fermée proprement
+        st.info(f"🌡️ Temp: {t:.2f} °C | 🌧️ Pluie: {pl:.2f} mm | 💧 Hum: {hum:.2f} % | 💨 Vent: {vent:.2f} m/s")
+    
+    if btn:
+        # --- Calcul du score Machine Learning ---
+        risque_ml = 20.0
+        if model_charge:
+            try:
+                X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
+                X["temp"], X["précipitations"], X["humidité"], X["vent"], X["mois"], X["annee"] = t, pl, hum, vent, mois, 2025
+                if f"region_{region}" in X.columns: X[f"region_{region}"] = 1
+                if f"saison_{saison}" in X.columns: X[f"saison_{saison}"] = 1
+                risque_ml = model_rf.predict_proba(X)[0][1] * 100
+            except: 
+                risque_ml = 20.0
+
+        # --- Calcul des Règles Métier Agronomiques ---
+        r_regle = 10
+        if pl
