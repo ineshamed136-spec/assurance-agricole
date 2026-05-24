@@ -73,9 +73,15 @@ def envoyer_alerte(user_id, region, risque, saison, statut_indemnite):
 
 # Coordonnées géographiques des gouvernorats de la Tunisie
 coords = {
-    "Tunis": (36.8065, 10.1815), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87),
-    "Beja": (36.72, 9.18), "Sousse": (35.82, 10.60), "Monastir": (35.76, 10.81),
-    "Kairouan": (35.67, 10.09), "Kebili": (33.70, 8.97), "Gabes": (33.88, 10.09),
+    "Tunis": (36.8065, 10.1815), 
+    "Nabeul": (36.45, 10.73), 
+    "Bizerte": (37.27, 9.87),
+    "Beja": (36.72, 9.18), 
+    "Sousse": (35.82, 10.60), 
+    "Monastir": (35.76, 10.81),
+    "Kairouan": (35.67, 10.09), 
+    "Kebili": (33.70, 8.97), 
+    "Gabes": (33.88, 10.09),
     "Medenine": (33.35, 10.50)
 }
 
@@ -84,11 +90,3 @@ coords = {
 # ==========================================
 @st.cache_data(ttl=3600)
 def get_weather(region, mois, annee=2025):
-    lat, lon = coords[region]
-    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
-    params = {
-        "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
-        "community": "AG",
-        "longitude": lon, 
-        "latitude": lat,
-        "start": str(annee),
