@@ -1,4 +1,6 @@
 streamlit
-pandas
+scikit-learn==VERSION_DE_COLAB
 joblib
-scikit-learn
+numpy
+pandas
+requests
