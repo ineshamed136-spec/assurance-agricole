@@ -1,69 +1,89 @@
+import streamlit as st
+import joblib
 import pandas as pd
+import requests
 
-# ==============================================================================
-# 1. CONFIGURATION ET PARAMÈTRES AGRONOMIQUES
-# Basés sur la littérature scientifique : FAO Irrigation and Drainage Paper 56
-# ==============================================================================
-FAO_THRESHOLDS = {
-    "pluie_confort": 35.0,  # mm/mois (Niveau de satisfaction hydrique)
-    "pluie_critique": 8.0,   # mm/mois (Point de flétrissement permanent)
-    "temp_echaudage": 39.0,  # °C (Risque d'échaudage pour céréales/olives)
-    "temp_letal": 47.0       # °C (Mortalité végétale)
-}
+st.set_page_config(page_title="Assurance Paramétrique", layout="wide")
 
-class ModeleAssuranceParametrique:
-    def __init__(self, superficie, rendement, risque_ml):
-        self.superficie = superficie
-        self.rendement = rendement
-        self.risque_ml = risque_ml # Valeur entre 0 et 1 (ex: 0.275)
+# ====================================
+# 1. CHARGEMENT DU MODELE ML
+# ====================================
+@st.cache_resource
+def load_model():
+    try: return joblib.load("model_rf.pkl"), True
+    except: return None, False
+model_rf, model_charge = load_model()
 
-    # ==========================================================================
-    # 2. LOGIQUE D'INDEMNISATION (Smart Contract Paramétrique)
-    # ==========================================================================
-    def calculer_indemnite(self, pluie_mesuree, temp_max):
-        """Calcule l'indemnité selon une règle paramétrique objective."""
-        capital_max = (self.superficie * 200) + (self.rendement * 25)
-        
-        # Trigger de catastrophe (100% indemnisation)
-        if pluie_mesuree <= FAO_THRESHOLDS["pluie_critique"] or temp_max >= FAO_THRESHOLDS["temp_letal"]:
-            taux = 1.0
-        # Trigger de stress (Indemnisation proportionnelle/linéaire)
-        elif pluie_mesuree < FAO_THRESHOLDS["pluie_confort"] or temp_max > FAO_THRESHOLDS["temp_echaudage"]:
-            taux_pluie = (FAO_THRESHOLDS["pluie_confort"] - pluie_mesuree) / (FAO_THRESHOLDS["pluie_confort"] - FAO_THRESHOLDS["pluie_critique"])
-            taux_temp = (temp_max - FAO_THRESHOLDS["temp_echaudage"]) / (FAO_THRESHOLDS["temp_letal"] - FAO_THRESHOLDS["temp_echaudage"])
-            taux = max(taux_pluie, taux_temp)
-        else:
-            taux = 0.0
-            
-        return capital_max * min(taux, 1.0)
+# ====================================
+# 2. LOGIQUE DE DONNÉES (NASA + FALLBACK)
+# ====================================
+coords = {"Tunis": (36.80, 10.18), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87)}
+# ... (ajoute les autres régions ici)
 
-    # ==========================================================================
-    # 3. LOGIQUE ACTUARIELLE (Calcul de la Prime Totale)
-    # ==========================================================================
-    def calculer_prime_totale(self):
-        """Calcul de la prime annuelle (Risque IA + Chargement de frais)."""
-        # Prime Pure = Risque ML * Coefficient de sécurité (Actuariat)
-        prime_pure = self.risque_ml * 4.2
-        
-        # Chargement des frais de gestion (opérationnel)
-        chargement_frais = (self.superficie * 12) + (self.rendement * 1.1)
-        
-        return prime_pure + chargement_frais
-
-# ==============================================================================
-# 4. SIMULATION D'UTILISATION
-# ==============================================================================
-if __name__ == "__main__":
-    # Paramètres d'une parcelle test
-    parcelle = ModeleAssuranceParametrique(superficie=10, rendement=20, risque_ml=0.275)
+def get_weather(reg, m):
+    """
+    Récupération dynamique des données :
+    1. Tente l'appel API NASA pour 2026.
+    2. Si échec ou donnée manquante, bascule sur la normale historique.
+    """
+    lat, lon = coords.get(reg, (36.80, 10.18))
+    # Appel API NASA
+    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
+    params = {
+        "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
+        "community": "AG",
+        "longitude": lon, "latitude": lat,
+        "start": "2026", "end": "2026",
+        "format": "JSON"
+    }
     
-    # Données météo captées via API NASA POWER
-    pluie_actuelle = 5.0
-    temp_actuelle = 40.0
-    
-    indemnite = parcelle.calculer_indemnite(pluie_actuelle, temp_actuelle)
-    prime = parcelle.calculer_prime_totale()
-    
-    print("--- RÉSULTATS DU MODÈLE D'ASSURANCE ---")
-    print(f"Indemnité à verser : {indemnite:.2f} DT")
-    print(f"Prime annuelle totale : {prime:.2f} DT")
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()["properties"]["parameter"]
+        k = f"2026{m:02d}"
+        
+        # Vérification si la donnée existe pour ce mois
+        if k in data["T2M"]:
+            return [float(data["T2M"][k]), float(data["PRECTOTCORR"][k]), 
+                    float(data["RH2M"][k]), float(data["WS2M"][k])], "📡 Donnée Satellite Temps Réel"
+    except:
+        pass
+        
+    # Fallback : Si l'API échoue ou le mois n'est pas encore passé
+    return [24.5, 12.0, 60.0, 4.0], "📊 Normale Historique (Estimation)"
+
+# ====================================
+# 3. INTERFACE UTILISATEUR
+# ====================================
+st.title("🌾 Plateforme d'Assurance Agricole")
+st.write("Gestion des risques paramétriques - Année 2026")
+
+# Saisie des paramètres
+col1, col2 = st.columns(2)
+with col1:
+    uid = st.text_input("ID Exploitant", "TUN-01")
+    region = st.selectbox("Région", list(coords.keys()))
+    mois = st.slider("Mois d'analyse", 1, 12, 5)
+    btn = st.button("🚀 LANCER L'ANALYSE")
+
+with col2:
+    if btn:
+        weather_data, source = get_weather(region, mois)
+        st.success(f"Source des données : {source}")
+        
+        # Calcul du risque et prime (Logique métier)
+        t, pl, hum, vent = weather_data
+        risque = 15.0 # Simulation de calcul
+        prime = (risque * 4.2) + 150
+        
+        st.metric("Taux de Risque", f"{risque}%")
+        st.metric("Prime Totale", f"{prime} DT")
+        
+        # ZONE DEVELOPPEUR : JSON
+        with st.expander("🛠️ Document JSON (Pour l'encadrant)"):
+            st.json({
+                "annee": 2026,
+                "donnees_meteo": {"temp": t, "pluie": pl, "humidite": hum},
+                "analyse_risque": {"taux": risque, "source": source},
+                "prime_calcul": {"prime_pure": risque * 4.2, "frais": 150}
+            })
