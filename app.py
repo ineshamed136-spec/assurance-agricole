@@ -5,8 +5,9 @@ import requests
 
 st.set_page_config(page_title="Assurance Agricole 2026", layout="wide")
 
+
 # ====================================
-# 1. CHARGEMENT MODELE
+# 1. MODELE ML
 # ====================================
 @st.cache_resource
 def load_model():
@@ -19,7 +20,7 @@ model_rf, model_ok = load_model()
 
 
 # ====================================
-# 2. NASA POWER (OPTIONNEL + SAFE)
+# 2. NASA POWER (VRAI + STABLE)
 # ====================================
 def get_weather(region, mois):
 
@@ -52,19 +53,19 @@ def get_weather(region, mois):
             "format": "JSON"
         }
 
-        r = requests.get(url, params=params, timeout=5)
+        r = requests.get(url, params=params, timeout=6)
 
         if r.status_code != 200:
             return fallback, "Fallback"
 
         d = r.json()["properties"]["parameter"]
-        k = f"2026{mois:02d}"
+        key = f"2026{mois:02d}"
 
         return [
-            float(d["T2M"].get(k, 25)),
-            float(d["PRECTOTCORR"].get(k, 10)),
-            float(d["RH2M"].get(k, 60)),
-            float(d["WS2M"].get(k, 3))
+            float(d["T2M"].get(key, 25)),
+            float(d["PRECTOTCORR"].get(key, 10)),
+            float(d["RH2M"].get(key, 60)),
+            float(d["WS2M"].get(key, 3))
         ], "NASA POWER"
 
     except:
@@ -72,7 +73,7 @@ def get_weather(region, mois):
 
 
 # ====================================
-# 3. RISQUE UNIQUE (ML + METIER + REGION)
+# 3. RISQUE UNIQUE (ML + METIER + CLIMAT)
 # ====================================
 def calcul_risque(region, mois, irrigation, t, pl):
 
@@ -104,7 +105,7 @@ def calcul_risque(region, mois, irrigation, t, pl):
         ml = 40
 
     # =========================
-    # METIER
+    # METIER (IMPORTANT)
     # =========================
     region_risk = {
         "Tunis": 5,
@@ -123,14 +124,16 @@ def calcul_risque(region, mois, irrigation, t, pl):
     if irrigation == "Non":
         metier += 15
 
-    # stress climatique simple (même avec NASA ou fallback)
+    # =========================
+    # CLIMAT (NASA POWER)
+    # =========================
     if pl < 15:
-        metier += 20
+        metier += 25   # sécheresse forte
     if t > 38:
-        metier += 15
+        metier += 20   # chaleur forte
 
     # =========================
-    # SCORE UNIQUE
+    # SCORE FINAL UNIQUE
     # =========================
     risk = (0.6 * ml) + (0.4 * metier)
 
@@ -145,15 +148,26 @@ def calcul_prime(risk, sup, prod):
     valeur = (sup * 180) + (prod * 35)
     frais = (sup * 12) + (prod * 1.1)
 
-    prime = (risk / 100) * valeur + frais
-
-    return prime, valeur
+    return (risk / 100) * valeur + frais, valeur
 
 
 # ====================================
-# 5. UI
+# 5. INDEMNITE (CORRIGÉE ✔)
 # ====================================
-st.title("🌾 Assurance Agricole Paramétrique 2026")
+def calcul_indemnité(risk, pl, sup):
+
+    if risk > 70:
+        return sup * (risk / 10)
+    elif pl < 10:
+        return sup * 5
+    else:
+        return 0
+
+
+# ====================================
+# 6. INTERFACE
+# ====================================
+st.title("🌾 Assurance Agricole Paramétrique 2026 (NASA POWER)")
 
 col1, col2 = st.columns(2)
 
@@ -176,25 +190,26 @@ with col2:
 
     if btn:
 
-        # météo
+        # météo NASA POWER
         (t, pl, hum, vent), source = get_weather(region, mois)
 
-        # risque unique
+        # risque
         risk = calcul_risque(region, mois, irrigation, t, pl)
 
         # prime
         prime, valeur = calcul_prime(risk, sup, prod)
 
-        # indemnité simple
-        indemnité = 0
-        if risk > 70:
-            indemnité = sup * 8
+        # indemnité
+        indemnité = calcul_indemnité(risk, pl, sup)
 
-        # affichage
-        st.subheader("📊 Résultat final")
+        # =========================
+        # AFFICHAGE
+        # =========================
+        st.subheader("📊 Résultats")
 
         st.info(f"🌍 Source météo : {source}")
-        st.metric("🔥 Score de risque", f"{risk:.2f} %")
+
+        st.metric("🔥 Risque", f"{risk:.2f} %")
         st.success(f"💰 Prime totale : {prime:.2f} DT")
 
         if indemnité > 0:
@@ -202,18 +217,20 @@ with col2:
         else:
             st.success("🍏 Aucun sinistre")
 
-        # explication
-        with st.expander("📌 Formule"):
+        # =========================
+        # EXPLICATION
+        # =========================
+        with st.expander("📌 Formules"):
 
             st.markdown(f"""
-### 🔹 Risque unique
-Risque = 60% ML + 40% expertise métier + climat
+### 🔹 Risque
+ML + métier + données NASA POWER
 
 ### 🔹 Prime
 Prime = Risque × Valeur + frais
 
 Valeur = {valeur:.2f} DT
 
-### 🔹 Données météo
-Source : {source} (NASA POWER ou fallback local)
+### 🔹 Indemnité
+Déclenchée si risque > 70 ou sécheresse forte
 """)
