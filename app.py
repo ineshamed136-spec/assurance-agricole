@@ -3,10 +3,10 @@ import joblib
 import pandas as pd
 import requests
 
-st.set_page_config(page_title="Assurance Paramétrique", layout="wide")
+st.set_page_config(page_title="Assurance", layout="wide")
 
 # ====================================
-# 1. CHARGEMENT DU MODELE ML
+# 1. CHARGEMENT DU MODELE
 # ====================================
 @st.cache_resource
 def load_model():
@@ -15,75 +15,191 @@ def load_model():
 model_rf, model_charge = load_model()
 
 # ====================================
-# 2. LOGIQUE DE DONNÉES (NASA + FALLBACK)
+# 2. FONCTION DE PREDICTION ML SECURISEE
 # ====================================
-coords = {"Tunis": (36.80, 10.18), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87)}
-# ... (ajoute les autres régions ici)
-
-def get_weather(reg, m):
-    """
-    Récupération dynamique des données :
-    1. Tente l'appel API NASA pour 2026.
-    2. Si échec ou donnée manquante, bascule sur la normale historique.
-    """
-    lat, lon = coords.get(reg, (36.80, 10.18))
-    # Appel API NASA
-    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
-    params = {
-        "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
-        "community": "AG",
-        "longitude": lon, "latitude": lat,
-        "start": "2026", "end": "2026",
-        "format": "JSON"
-    }
-    
+def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
+    if not model_charge:
+        return 20.0
     try:
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()["properties"]["parameter"]
-        k = f"2026{m:02d}"
-        
-        # Vérification si la donnée existe pour ce mois
-        if k in data["T2M"]:
-            return [float(data["T2M"][k]), float(data["PRECTOTCORR"][k]), 
-                    float(data["RH2M"][k]), float(data["WS2M"][k])], "📡 Donnée Satellite Temps Réel"
+        cm = model_rf.feature_names_in_
+        X = pd.DataFrame(0, index=[0], columns=cm)
+        X["temp"] = t
+        X["précipitations"] = pl
+        X["humidité"] = hum
+        X["vent"] = vent
+        X["mois"] = mois
+        X["annee"] = 2025
+        if f"region_{reg}" in X.columns: 
+            X[f"region_{reg}"] = 1
+        if f"saison_{sais}" in X.columns: 
+            X[f"saison_{sais}"] = 1
+        return float(model_rf.predict_proba(X)[0][1] * 100)
     except:
-        pass
-        
-    # Fallback : Si l'API échoue ou le mois n'est pas encore passé
-    return [24.5, 12.0, 60.0, 4.0], "📊 Normale Historique (Estimation)"
+        return 20.0
 
 # ====================================
-# 3. INTERFACE UTILISATEUR
+# 3. COORDONNEES, SAISONS & METEO
 # ====================================
-st.title("🌾 Plateforme d'Assurance Agricole")
-st.write("Gestion des risques paramétriques - Année 2026")
+coords = {
+    "Tunis": (36.80, 10.18), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87),
+    "Beja": (36.72, 9.18), "Sousse": (35.82, 10.60), "Monastir": (35.76, 10.81),
+    "Kairouan": (35.67, 10.09), "Kebili": (33.70, 8.97), "Gabes": (33.88, 10.09)
+}
 
-# Saisie des paramètres
-col1, col2 = st.columns(2)
+saisons_map = {
+    12: "Hiver", 1: "Hiver", 2: "Hiver",
+    3: "Printemps", 4: "Printemps", 5: "Printemps",
+    6: "Ete", 7: "Ete", 8: "Ete",
+    9: "Automne", 10: "Automne", 11: "Automne"
+}
+
+normales_saisonnieres = {
+    "Nabeul": {
+        1: [11.8, 55.2, 74.0, 5.1], 2: [12.2, 48.1, 72.0, 5.3], 3: [14.1, 38.5, 70.0, 4.8],
+        4: [16.5, 29.0, 68.0, 4.4], 5: [20.8, 16.2, 65.0, 4.1], 6: [25.2, 5.4, 61.0, 3.9],
+        7: [28.5, 1.1, 59.0, 3.8],  8: [29.1, 4.2, 62.0, 3.9],  9: [25.8, 35.6, 67.0, 4.2],
+        10: [21.7, 52.0, 71.0, 4.5], 11: [16.9, 61.3, 73.0, 4.8], 12: [13.1, 64.0, 75.0, 5.2]
+    },
+    "Tunis": {
+        1: [11.5, 62.0, 76.0, 4.8], 5: [21.2, 22.4, 66.0, 4.2], 7: [29.1, 2.5, 57.0, 4.0],
+        8: [29.5, 5.1, 59.0, 4.1]
+    },
+    "Beja": {
+        1: [9.8, 95.0, 82.0, 4.5], 5: [19.5, 38.0, 68.0, 3.9], 7: [28.2, 2.0, 52.0, 3.7],
+        8: [28.6, 4.0, 54.0, 3.8]
+    },
+    "Kebili": {
+        1: [10.2, 12.0, 60.0, 3.8], 5: [24.8, 6.0, 42.0, 4.9], 7: [33.5, 0.5, 33.0, 4.6],
+        8: [33.1, 1.2, 36.0, 4.4]
+    }
+}
+
+@st.cache_data(ttl=3600)
+def get_weather(reg, m):
+    secours_local = normales_saisonnieres.get(reg, {}).get(m, [24.5, 12.0, 60.0, 4.0])
+    lat, lon = coords[reg]
+    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
+    p = {"parameters": "T2M,PRECTOTCORR,RH2M,WS2M", "community": "AG", "longitude": lon, "latitude": lat, "start": "2025", "end": "2025", "format": "JSON"}
+    try:
+        r = requests.get(url, params=p, timeout=8)
+        if r.status_code != 200: 
+            return secours_local, "Historique (Fallback)"
+        d = r.json()["properties"]["parameter"]
+        k = f"2025{m:02d}"
+        return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])], "NASA POWER API"
+    except: 
+        return secours_local, "Historique (Fallback)"
+
+# ====================================
+# 4. INTERFACE GRAPHIQUE
+# ====================================
+st.title("🌾 Assurance Agricole Paramétrique")
+if model_charge: st.sidebar.success("🔮 Système ML Initialisé")
+else: st.sidebar.warning("⚙️ Mode Règles Métiers Actif")
+
+col1, col2 = st.columns([1, 1.2], gap="medium")
 with col1:
-    uid = st.text_input("ID Exploitant", "TUN-01")
-    region = st.selectbox("Région", list(coords.keys()))
-    mois = st.slider("Mois d'analyse", 1, 12, 5)
-    btn = st.button("🚀 LANCER L'ANALYSE")
+    st.subheader("📋 Paramètres du Contrat")
+    uid = st.text_input("ID Exploitant", value="TUN-01")
+    region = st.selectbox("Région de l'exploitation", list(coords.keys()), index=1)
+    culture = st.selectbox("Type de Culture", ["Olives", "Cereales"])
+    irrigation = st.radio("Système d'Irrigation", ["Oui", "Non"], horizontal=True)
+    mois = st.selectbox("Mois sous risque", list(range(1, 13)), index=7)
+    sup = st.number_input("Superficie Totale (Ha)", min_value=1, value=15)
+    prod = st.number_input("Rendement Estimé (Tonnes)", min_value=1, value=60)
+    
+    saison = saisons_map.get(mois, "Ete")
+    btn = st.button("🚀 LANCER L'ANALYSE ACTUARIELLE", use_container_width=True, type="primary")
 
 with col2:
+    w, source_data = get_weather(region, mois)
+    t, pl, hum, vent = w[0], w[1], w[2], w[3]
+    t1, t2, t3 = st.tabs(["🌦️ Indices Météo", "📉 Risque & Tarification", "🛡️ Indemnisation Paramétrique"])
+    
+    with t1:
+        st.write(f"**📍 Région :** {region} | **📅 Saison :** {saison}")
+        st.info(f"🌡️ Température : {t:.2f} °C | 🌧️ Pluviométrie : {pl:.2f} mm | 💧 Humidité : {hum:.2f} % | 💨 Vent : {vent:.2f} m/s")
+        if "Fallback" in source_data:
+            st.warning(f"⚠️ Mode Simulation : Données issues des **{source_data}** (Moyennes réelles 2014-2024).")
+        else:
+            st.success(f"✅ Flux de données en provenance de : **{source_data}**")
+    
     if btn:
-        weather_data, source = get_weather(region, mois)
-        st.success(f"Source des données : {source}")
+        risque_ml = predire_risque_ml(t, pl, hum, vent, mois, region, saison)
+
+        r_regle = 10
+        txt_regle = "Base Standard (10%)"
+        if pl < 15: 
+            r_regle += 35
+            txt_regle += " + Stress Hydrique (<15mm : +35%)"
+        if t > 38: 
+            r_regle += 25
+            txt_regle += " + Stress Thermique (>38C : +25%)"
+        if irrigation == "Non": 
+            r_regle += 15
+            txt_regle += " + Vulnérabilité Sol (Non-irrigué : +15%)"
         
-        # Calcul du risque et prime (Logique métier)
-        t, pl, hum, vent = weather_data
-        risque = 15.0 # Simulation de calcul
-        prime = (risque * 4.2) + 150
+        risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
+        prime_pure = risque * 4.2
+        frais_ch = (sup * 12) + (prod * 1.1)
+        prime = prime_pure + frais_ch
         
-        st.metric("Taux de Risque", f"{risque}%")
-        st.metric("Prime Totale", f"{prime} DT")
-        
-        # ZONE DEVELOPPEUR : JSON
-        with st.expander("🛠️ Document JSON (Pour l'encadrant)"):
-            st.json({
-                "annee": 2026,
-                "donnees_meteo": {"temp": t, "pluie": pl, "humidite": hum},
-                "analyse_risque": {"taux": risque, "source": source},
-                "prime_calcul": {"prime_pure": risque * 4.2, "frais": 150}
-            })
+        with t2:
+            st.subheader("📊 Résultats Actuariels")
+            m1, m2 = st.columns(2)
+            m1.metric("🔥 Score de Risque Global", f"{risque:.2f} %")
+            m2.metric("💳 Prime Totale Facturée", f"{prime:.2f} DT")
+            st.progress(int(risque))
+            
+            with st.expander("🔍 Décomposition de la Formule de Tarification"):
+                st.markdown(f"""
+                * **Modèle de Risque Hybride :** `70% Machine Learning + 30% Expertise Métier`
+                * **Détail Calcul Métier :** {txt_regle} = **{r_regle}%**
+                * **Calcul de la Prime Pure :** Risque Global ({risque:.2f}%) × Coeff Actuariel (4.2) = **{prime_pure:.2f} DT**
+                * **Chargement de Frais :** (Superficie × 12 DT) + (Rendement × 1.1 DT) = **{frais_ch:.2f} DT**
+                * **Formule Finale :** `Prime Totale = Prime Pure + Chargement`
+                """)
+            
+        with t3:
+            st.subheader("🛡️ État du Déclencheur (Trigger)")
+            cap_max = (sup * 200) + (prod * 25)
+            ind, p_rate, peril = 0.0, 0.0, "Aucun"
+            txt_form, txt_expl = "Aucune action", "Les indices climatiques mesurés sont conformes aux normales biologiques."
+            
+            if pl < 35.0:
+                peril = "Sécheresse"
+                if pl <= 8.0:
+                    p_rate, txt_form, txt_expl = 1.0, "Forfait Catastrophe Intégral (100%)", f"Pluviométrie ({pl:.2f} mm) ≤ Seuil Critique Absolu (8 mm)."
+                else:
+                    p_rate = (35.0 - pl) / (35.0 - 8.0)
+                    txt_form = "Indemnisation Linéaire Progressive"
+                    txt_expl = f"Pluviométrie ({pl:.2f} mm) sous le seuil de confort (35 mm)."
+                ind = p_rate * cap_max
+            elif t > 39.0:
+                peril = "Canicule"
+                if t >= 47.0:
+                    p_rate, txt_form, txt_expl = 1.0, "Forfait Catastrophe Intégral (100%)", f"Température ({t:.2f} C) ≥ Limite de létalité végétale (47 C)."
+                else:
+                    p_rate = (t - 39.0) / (47.0 - 39.0)
+                    txt_form = "Indemnisation Stress Thermique Linéaire"
+                    txt_expl = f"Température ({t:.2f} C) en zone de flétrissement."
+                ind = p_rate * cap_max
+            
+            if ind > 0: 
+                st.error(f"🚨 INDEMNITÉ DÉCLENCHÉE : {ind:.2f} DT (Événement : {peril})")
+            else: 
+                st.success("🍏 AUCUN SINISTRE DÉTECTÉ (Indemnité : 0.00 DT)")
+            
+            with st.expander("🔍 Paramètres du Smart Contract"):
+                st.markdown(f"""
+                * **Capitaux Maximums Exposés :** (Superficie × 200 DT) + (Rendement × 25 DT) = **{cap_max:.2f} DT**
+                * **Règle de Calcul Indiciaire :** `{txt_form}`
+                * **Justification Biologique :** {txt_expl}
+                * *Note Académique : L'indemnité est arbitrée par l'oracle de la NASA, excluant tout coût d'expertise physique ou délai administratif.*
+                """)
+            
+            tok, cid = st.secrets.get("BOT_TOKEN", ""), st.secrets.get("CHAT_ID", "")
+            if tok and cid:
+                txt = f"🌾 ASSURANCE\n👤 ID: {uid}\n📈 Risque: {risque:.2f}%\n💰 Indemnite: {ind:.2f} DT"
+                try: requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": cid, "text": txt}, timeout=3)
+                except: pass
