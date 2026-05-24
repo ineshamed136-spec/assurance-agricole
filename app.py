@@ -34,6 +34,10 @@ st.title("🌾 Assurance Agricole Paramétrique")
 if model_charge: st.sidebar.success("ML Actif")
 else: st.sidebar.warning("Mode Regles Metiers")
 
+# Initialisation de la mémoire du bouton pour éviter les bugs d'affichage
+if "running" not in st.session_state:
+    st.session_state.running = False
+
 col1, col2 = st.columns([1, 1.2], gap="medium")
 with col1:
     st.subheader("Contrat")
@@ -45,17 +49,21 @@ with col1:
     sup = st.number_input("Superficie (Ha)", min_value=1, value=15)
     prod = st.number_input("Rendement (T)", min_value=1, value=60)
     saison = "Hiver" if mois in [12,1,2] else "Printemps" if mois in [3,4,5] else "Ete" if mois in [6,7,8] else "Automne"
-    btn = st.button("🚀 ANALYSER", use_container_width=True, type="primary")
+    
+    if st.button("🚀 ANALYSER", use_container_width=True, type="primary"):
+        st.session_state.running = True
 
 with col2:
     w = get_weather(region, mois)
     t, pl, hum, vent = w[0], w[1], w[2], w[3]
     t1, t2, t3 = st.tabs(["🌦️ Meteo", "📉 Risque", "🛡️ Indemnite"])
+    
     with t1:
         st.write(f"**Region :** {region} | **Saison :** {saison}")
         st.info(f"🌡️ Temp: {t:.2f} °C | 🌧️ Pluie: {pl:.2f} mm | 💧 Hum: {hum:.2f} % | 💨 Vent: {vent:.2f} m/s")
     
-    if btn:
+    # Les onglets lisent la mémoire du bouton pour afficher les calculs
+    if st.session_state.running:
         risque_ml = 20.0
         if model_charge:
             try:
@@ -65,3 +73,7 @@ with col2:
                 if f"saison_{saison}" in X.columns: X[f"saison_{saison}"] = 1
                 risque_ml = model_rf.predict_proba(X)[0][1] * 100
             except: pass
+
+        r_regle = 10
+        if pl < 15: r_regle += 35
+        if t
