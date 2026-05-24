@@ -81,4 +81,26 @@ with col2:
                 if col_reg in X.columns: X[col_reg] = 1
                 if col_sais in X.columns: X[col_sais] = 1
                 
-                risque_ml = model_rf
+                risque_ml = model_rf.predict_proba(X)[0][1] * 100
+            except: 
+                # Sécurité dynamique liée au climat si l'alignement des colonnes du modèle échoue
+                risque_ml = max(10.0, min(90.0, t * 2.2))
+        else:
+            # Mode secours si le fichier .pkl est absent
+            risque_ml = max(10.0, min(90.0, t * 2.2))
+
+        # --- 2. CALCUL DES RÈGLES MÉTIER AGRONOMIQUES (DYNAMIQUES) ---
+        r_regle = 10
+        if pl < 35: 
+            r_regle += max(0, int((35 - pl) * 2.0))
+        if t > 30: 
+            r_regle += max(0, int((t - 30) * 3.5))
+        if irrigation == "Non": 
+            r_regle += 15
+        
+        # --- 3. INDICE DE RISQUE GLOBAL COMBINÉ ---
+        risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
+        prime = (risque * 4.2) + (sup * 12) + (prod * 1.1)
+        
+        with t2:
+            st.markdown("### Analyse & Tarification Actuari
