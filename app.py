@@ -4,11 +4,10 @@ import pandas as pd
 import requests
 
 # ====================================
-# 1. PAGE CONFIG
+# 1. CONFIG
 # ====================================
 st.set_page_config(
     page_title="Assurance",
-    page_icon="🌾",
     layout="wide"
 )
 
@@ -54,11 +53,11 @@ def envoyer_alerte(uid, reg, risq, stat):
     if not BOT_TOKEN or not CHAT_ID:
         return
     msg = (
-        f"🌾 *ASSURANCE*\n"
-        f"👤 *ID :* {uid}\n"
-        f"📍 *Région :* {reg}\n"
-        f"📈 *Risque :* {risq:.2f} %\n"
-        f"💰 *Résultat :* {stat}"
+        f"ASSURANCE\n"
+        f"ID: {uid}\n"
+        f"Reg: {reg}\n"
+        f"Risque: {risq:.2f}%\n"
+        f"Resultat: {stat}"
     )
     try:
         u = (
@@ -69,8 +68,7 @@ def envoyer_alerte(uid, reg, risq, stat):
             u,
             data={
                 "chat_id": CHAT_ID,
-                "text": msg,
-                "parse_mode": "Markdown"
+                "text": msg
             },
             timeout=5
         )
@@ -91,7 +89,7 @@ coords = {
 }
 
 liste_regions = list(coords.keys())
-liste_cultures = ["Olives", "Céréales"]
+liste_cultures = ["Olives", "Cereales"]
 liste_irrigation = ["Oui", "Non"]
 liste_mois = list(range(1, 13))
 
@@ -122,54 +120,3 @@ def get_weather(region, mois, annee=2025):
         p = r.json()["properties"]["parameter"]
         k = f"{annee}{mois:02d}"
         return (
-            float(p["T2M"][k]),
-            float(p["PRECTOTCORR"][k]),
-            float(p["RH2M"][k]),
-            float(p["WS2M"][k])
-        )
-    except:
-        return 24.5, 12.0, 60.0, 4.0
-
-# ====================================
-# 4. INTERFACE
-# ====================================
-st.title("🌾 Système Décisionnel")
-
-if model_charge:
-    st.sidebar.success("✅ ML Actif")
-else:
-    st.sidebar.warning("⚠️ Mode Règles")
-
-st.markdown("---")
-col_f, col_d = st.columns(
-    [1, 1.3],
-    gap="medium"
-)
-
-with col_f:
-    st.subheader("📋 Contrat")
-    c1, c2 = st.columns(2)
-    user_id = c1.text_input(
-        "🆔 ID Exploitant",
-        value="TUN-NABEUL-01"
-    )
-    region = c2.selectbox(
-        "📍 Région",
-        liste_regions,
-        index=1
-    )
-    
-    c3, c4 = st.columns(2)
-    culture = c3.selectbox(
-        "🌱 Culture",
-        liste_cultures
-    )
-    irrigation = c4.radio(
-        "💧 Irrigation",
-        liste_irrigation,
-        horizontal=True
-    )
-
-    c5, c6, c7 = st.columns(3)
-    mois = c5.selectbox(
-        "📅 Mois
