@@ -109,8 +109,23 @@ def get_weather(region, mois, annee=2025):
             return None
             
         data = r.json()  
-        p = data["properties"]["parameter"]  # Ligne 112 sécurisée et complétée ici
+        p = data["properties"]["parameter"]  
         
         key = f"{annee}{mois:02d}"
-        temp = p.get("T2M", {}).get(key, 25.0)
-        pluie = p.get("PRECTOTCORR", {}).get(
+        
+        # Lignes réécrites de manière condensée et ultra-sécurisée sur une seule ligne
+        temp = float(p.get("T2M", {}).get(key, 25.0))
+        pluie = float(p.get("PRECTOTCORR", {}).get(key, 20.0))
+        humidite = float(p.get("RH2M", {}).get(key, 60.0))
+        vent = float(p.get("WS2M", {}).get(key, 4.0))
+        
+        return temp, pluie, humidite, vent
+        
+    except Exception as e:
+        return None
+
+# ==========================================
+# 5. STRUCTURE DE L'INTERFACE UTILISATEUR
+# ==========================================
+st.title("🌾 Système Décisionnel d'Assurance Agricole Paramétrique")
+st.
