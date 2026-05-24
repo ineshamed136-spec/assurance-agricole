@@ -1,13 +1,12 @@
 import streamlit as st
 import requests
 import pandas as pd
-import json
 
 st.set_page_config(page_title="Assurance Agricole 2026", layout="wide")
 
 
 # =========================================
-# NASA POWER (AMÉLIORÉ + VARIATION RÉELLE)
+# 1. NASA POWER (CORRIGÉ + ROBUSTE)
 # =========================================
 def get_weather(region, mois):
 
@@ -30,74 +29,49 @@ def get_weather(region, mois):
     params = {
         "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
         "community": "AG",
-        "longitude": lon,
         "latitude": lat,
+        "longitude": lon,
         "format": "JSON"
     }
 
-    try:
-        r = requests.get(url, params=params, timeout=6)
-        d = r.json()["properties"]["parameter"]
+    r = requests.get(url, params=params, timeout=8)
+    d = r.json()["properties"]["parameter"]
 
-        # 🔥 variation réelle par mois (CLIMATOLOGIE NASA)
-        temp = d["T2M"][str(mois)]
-        pluie = d["PRECTOTCORR"][str(mois)]
-        hum = d["RH2M"][str(mois)]
-        vent = d["WS2M"][str(mois)]
-
-        return {
-            "temp": float(temp),
-            "pluie": float(pluie),
-            "humidite": float(hum),
-            "vent": float(vent)
-        }
-
-    except:
-        # fallback MAIS différent selon région (pas constant)
-        base = {
-            "Tunis": [28, 15, 65, 4],
-            "Nabeul": [30, 12, 70, 5],
-            "Beja": [26, 25, 75, 3],
-            "Kebili": [38, 5, 40, 6]
-        }
-
-        t, p, h, v = base.get(region, [27, 10, 60, 3])
-
-        return {
-            "temp": t,
-            "pluie": p,
-            "humidite": h,
-            "vent": v
-        }
+    # 🔥 valeurs par mois (TRÈS IMPORTANT)
+    return {
+        "temp": float(d["T2M"][str(mois)]),
+        "pluie": float(d["PRECTOTCORR"][str(mois)]),
+        "humidite": float(d["RH2M"][str(mois)]),
+        "vent": float(d["WS2M"][str(mois)])
+    }
 
 
 # =========================================
-# RISQUE (NON LINÉAIRE → IMPORTANT)
+# 2. RISQUE (RÉALISTE + NON LINÉAIRE)
 # =========================================
 def calcul_risque(data, region, irrigation, culture, mois):
 
-    # base
-    risk = 15
+    risk = 12
 
-    # 🌧 pluie (non linéaire)
-    if data["pluie"] < 10:
-        risk += 35
-    elif data["pluie"] < 25:
-        risk += 20
+    # 🌧 pluie (impact fort)
+    if data["pluie"] < 8:
+        risk += 40
+    elif data["pluie"] < 20:
+        risk += 25
     else:
-        risk += 5
+        risk += 10
 
     # 🌡 température
     if data["temp"] > 40:
-        risk += 30
-    elif data["temp"] > 32:
-        risk += 15
+        risk += 35
+    elif data["temp"] > 33:
+        risk += 18
 
     # 💨 vent
-    risk += max(0, (data["vent"] - 3) * 4)
+    risk += max(0, (data["vent"] - 3) * 5)
 
     # 🌍 région
-    region_factor = {
+    region_map = {
         "Tunis": 5,
         "Nabeul": 10,
         "Bizerte": 8,
@@ -109,7 +83,7 @@ def calcul_risque(data, region, irrigation, culture, mois):
         "Gabes": 20
     }
 
-    risk += region_factor.get(region, 10)
+    risk += region_map.get(region, 10)
 
     # 💧 irrigation
     if irrigation == "Non":
@@ -121,7 +95,7 @@ def calcul_risque(data, region, irrigation, culture, mois):
     else:
         risk += 5
 
-    # 📅 mois (saisonnalité)
+    # 📅 saison été
     if mois in [6,7,8]:
         risk += 10
 
@@ -129,38 +103,40 @@ def calcul_risque(data, region, irrigation, culture, mois):
 
 
 # =========================================
-# CAPITAL
+# 3. CAPITAL ASSURÉ
 # =========================================
-def capital(superficie, production):
-    return (superficie * 200) + (production * 40)
+def capital(sup, prod):
+    return (sup * 200) + (prod * 45)
 
 
 # =========================================
-# PRIME (STABLE + LOGIQUE)
+# 4. PRIME (FORMULE ASSURANCE SIMPLE)
 # =========================================
 def prime(risk, cap):
-    return (risk / 100) * cap + cap * 0.03
+    return (risk / 100) * cap + cap * 0.025
 
 
 # =========================================
-# INDEMNITÉ (CORRIGÉE IMPORTANT)
+# 5. INDEMNITÉ (LOGIQUE CORRIGÉE)
 # =========================================
 def indemnité(risk, data, cap):
 
+    # sécheresse
+    if data["pluie"] < 7:
+        return cap * 0.25
+
+    # risque élevé
     if risk > 80:
-        return cap * 0.6
+        return cap * 0.5
 
     if risk > 60:
         return cap * 0.3
-
-    if data["pluie"] < 8:
-        return cap * 0.2
 
     return 0
 
 
 # =========================================
-# UI
+# 6. UI
 # =========================================
 st.title("🌾 Assurance Agricole Paramétrique 2026")
 
@@ -168,7 +144,11 @@ col1, col2 = st.columns(2)
 
 with col1:
 
-    region = st.selectbox("Région", ["Tunis","Nabeul","Bizerte","Beja","Sousse","Monastir","Kairouan","Kebili","Gabes"])
+    region = st.selectbox("Région", list({
+        "Tunis":1,"Nabeul":1,"Bizerte":1,"Beja":1,
+        "Sousse":1,"Monastir":1,"Kairouan":1,"Kebili":1,"Gabes":1
+    }.keys()))
+
     mois = st.selectbox("Mois", list(range(1,13)))
     sup = st.number_input("Superficie", 1, 100, 15)
     prod = st.number_input("Production", 1, 100, 60)
@@ -176,6 +156,7 @@ with col1:
     culture = st.selectbox("Culture", ["Olives","Cereales"])
 
     btn = st.button("Calculer")
+
 
 with col2:
 
@@ -193,8 +174,8 @@ with col2:
 
         st.write("🌡 Température:", round(data["temp"],2))
         st.write("🌧 Pluie:", round(data["pluie"],2))
-        st.write("💧 Humidité:", round(data["humidite"],2))
         st.write("💨 Vent:", round(data["vent"],2))
+        st.write("💧 Humidité:", round(data["humidite"],2))
 
         st.metric("🔥 Risque", f"{risk:.2f}%")
         st.success(f"💰 Prime: {pr:.2f} DT")
@@ -208,11 +189,11 @@ with col2:
 
             st.markdown("""
 ### 🔹 Risque
-Météo NASA + région + culture + saison (non linéaire)
+Météo NASA POWER + région + culture + irrigation
 
 ### 🔹 Prime
-Prime = (Risque × Capital) + 3% frais
+Prime = (Risque × Capital) + frais 2.5%
 
 ### 🔹 Indemnité
-Basée sur seuils climatiques et risque élevé
+Basée sur sécheresse et seuil de risque élevé
 """)
