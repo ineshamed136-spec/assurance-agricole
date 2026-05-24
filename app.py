@@ -9,13 +9,14 @@ st.set_page_config(page_title="Assurance Agricole", layout="wide")
 @st.cache_resource
 def load_model():
     try:
-        return joblib.load("model.pkl"), True
+        model = joblib.load("model.pkl")
+        return model, True
     except:
         return None, False
 
 model_rf, model_charge = load_model()
 
-# 2. CONFIGURATION GÉOGRAPHIQUE
+# 2. CONFIGURATION
 coords = {
     "Tunis": (36.8, 10.18), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87),
     "Beja": (36.72, 9.18), "Sousse": (35.82, 10.6), "Monastir": (35.76, 10.81),
@@ -49,40 +50,43 @@ with col1:
 
 with col2:
     t, pl, hum, vent = get_weather(region, mois)
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Temp", f"{t:.1f}°C")
-    m2.metric("Pluie", f"{pl:.0f}mm")
-    m3.metric("Humid", f"{hum:.0f}%")
-    m4.metric("Vent", f"{vent:.1f}m/s")
-
+    
     if btn:
         risque = 20.0
         if model_charge:
             try:
+                # Initialisation : TOUT à zéro
                 X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
-                mapping = {"temp": t, "précipitations": pl, "humidité": hum, "vent": vent, "mois": mois}
+                
+                # Remplissage dynamique
                 for col in X.columns:
-                    if col in mapping: X[col] = mapping[col]
-                    if col == f"region_{region}": X[col] = 1
+                    if col == "temp": X[col] = t
+                    elif col == "précipitations": X[col] = pl
+                    elif col == "humidité": X[col] = hum
+                    elif col == "vent": X[col] = vent
+                    elif col == "mois": X[col] = mois
+                    # Activation précise de la région (One-Hot)
+                    elif col == f"region_{region}": X[col] = 1
+                
                 risque = model_rf.predict_proba(X)[0][1] * 100
-            except:
-                st.info("Le calcul du risque utilise une base par défaut.")
+            except Exception as e:
+                st.error(f"Erreur modèle : {e}")
 
-        if irrigation == "Non": risque += 10 
+        # Logique métier
+        if irrigation == "Non": risque += 10
+        risque = min(max(risque, 0.0), 100.0)
         
         prod_totale = sup * prod
         prime = (risque * 4.2) + (sup * 12) + (prod_totale * 1.1)
         cap_max = (sup * 200) + (prod_totale * 25)
         ind = max(0, ((35.0 - pl) / 27.0) * cap_max) if pl < 35 else 0
 
-        st.divider()
-        c1, c2 = st.columns(2)
-        c1.metric("🔥 Risque Global", f"{risque:.1f} %")
-        c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
-        st.error(f"💰 Indemnité estimée : {ind:.2f} DT")
+        # Affichage résultats
+        m1, m2, m3 = st.columns(3)
+        m1.metric("🔥 Risque Global", f"{risque:.1f} %")
+        m2.metric("💳 Prime", f"{prime:.2f} DT")
+        m3.error(f"💰 Indemnité : {ind:.2f} DT")
 
-        with st.expander("ℹ️ Explications des formules"):
-            st.write("1. Prime : (Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1)")
-            st.write("   - Le risque est ajusté par l'IA et le statut d'irrigation.")
-            st.write("2. Indemnité : ((35 - Pluie) / 27) * Capital_Max")
-            st.write("   - Le paiement est déclenché automatiquement si les pluies sont inférieures à 35mm.")
+        with st.expander("ℹ️ Détails du calcul"):
+            st.write("Le risque est calculé via votre modèle IA (Random Forest) en intégrant la localisation (One-Hot) et les variables météo réelles.")
+            st.write("L'indemnité est calculée sur une base paramétrique (seuil pluviométrique à 35mm).")
