@@ -6,7 +6,7 @@ import requests
 st.set_page_config(page_title="Assurance Agricole 2026", layout="wide")
 
 # ====================================
-# 1. MODELE ML
+# 1. CHARGEMENT MODELE
 # ====================================
 @st.cache_resource
 def load_model():
@@ -19,124 +19,26 @@ model_rf, model_ok = load_model()
 
 
 # ====================================
-# 2. ML CORRIGÉ (IMPORTANT FIX)
+# 2. NASA POWER (OPTIONNEL + SAFE)
 # ====================================
-def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
+def get_weather(region, mois):
 
-    if not model_ok:
-        return 40.0
+    coords = {
+        "Tunis": (36.80, 10.18),
+        "Nabeul": (36.45, 10.73),
+        "Bizerte": (37.27, 9.87),
+        "Beja": (36.72, 9.18),
+        "Sousse": (35.82, 10.60),
+        "Monastir": (35.76, 10.81),
+        "Kairouan": (35.67, 10.09),
+        "Kebili": (33.70, 8.97),
+        "Gabes": (33.88, 10.09)
+    }
+
+    fallback = [25, 10, 60, 3]
 
     try:
-        cols = model_rf.feature_names_in_
-        X = pd.DataFrame(0, index=[0], columns=cols)
-
-        # =========================
-        # VARIABLES NUMERIQUES
-        # =========================
-        if "temp" in cols:
-            X["temp"] = t
-        if "précipitations" in cols:
-            X["précipitations"] = pl
-        if "humidité" in cols:
-            X["humidité"] = hum
-        if "vent" in cols:
-            X["vent"] = vent
-        if "mois" in cols:
-            X["mois"] = mois
-
-        # =========================
-        # REGION (FIX CRITIQUE)
-        # =========================
-        region_cols = [c for c in cols if "region_" in c]
-        for c in region_cols:
-            if reg in c:
-                X[c] = 1
-
-        # fallback si match absent
-        if len(region_cols) > 0 and X[region_cols].sum().sum() == 0:
-            X[region_cols[0]] = 1
-
-        # =========================
-        # SAISON
-        # =========================
-        saison_cols = [c for c in cols if "saison_" in c]
-        for c in saison_cols:
-            if sais in c:
-                X[c] = 1
-
-        # =========================
-        # PREDICTION
-        # =========================
-        proba = model_rf.predict_proba(X)[0][1]
-
-        return float(proba * 100)
-
-    except Exception:
-        return 40.0
-
-
-# ====================================
-# 3. REGLES METIER
-# ====================================
-def calcul_regles_metier(pl, t, irrigation):
-
-    score = 10
-    exp = ["Base 10%"]
-
-    if pl < 15:
-        score += 35
-        exp.append("Sécheresse (+35%)")
-
-    if t > 38:
-        score += 25
-        exp.append("Chaleur extrême (+25%)")
-
-    if irrigation == "Non":
-        score += 20
-        exp.append("Non irrigué (+20%)")
-
-    return score, " + ".join(exp)
-
-
-# ====================================
-# 4. HYBRIDE
-# ====================================
-def calcul_risque_hybride(ml, metier):
-
-    # équilibré pour éviter blocage
-    return (0.65 * ml) + (0.35 * metier)
-
-
-# ====================================
-# 5. DONNEES
-# ====================================
-coords = {
-    "Tunis": (36.80, 10.18),
-    "Nabeul": (36.45, 10.73),
-    "Bizerte": (37.27, 9.87),
-    "Beja": (36.72, 9.18),
-    "Sousse": (35.82, 10.60),
-    "Monastir": (35.76, 10.81),
-    "Kairouan": (35.67, 10.09),
-    "Kebili": (33.70, 8.97),
-    "Gabes": (33.88, 10.09)
-}
-
-saisons_map = {
-    1: "Hiver", 2: "Hiver", 12: "Hiver",
-    3: "Printemps", 4: "Printemps", 5: "Printemps",
-    6: "Ete", 7: "Ete", 8: "Ete",
-    9: "Automne", 10: "Automne", 11: "Automne"
-}
-
-
-# ====================================
-# 6. METEO SAFE
-# ====================================
-def get_weather(reg, m):
-
-    try:
-        lat, lon = coords[reg]
+        lat, lon = coords[region]
 
         url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
 
@@ -150,37 +52,121 @@ def get_weather(reg, m):
             "format": "JSON"
         }
 
-        r = requests.get(url, params=params, timeout=8)
+        r = requests.get(url, params=params, timeout=5)
 
         if r.status_code != 200:
-            return [25, 10, 60, 3], "Fallback"
+            return fallback, "Fallback"
 
         d = r.json()["properties"]["parameter"]
-        k = f"2026{m:02d}"
+        k = f"2026{mois:02d}"
 
         return [
-            float(d["T2M"][k]),
-            float(d["PRECTOTCORR"][k]),
-            float(d["RH2M"][k]),
-            float(d["WS2M"][k])
-        ], "NASA"
+            float(d["T2M"].get(k, 25)),
+            float(d["PRECTOTCORR"].get(k, 10)),
+            float(d["RH2M"].get(k, 60)),
+            float(d["WS2M"].get(k, 3))
+        ], "NASA POWER"
 
     except:
-        return [25, 10, 60, 3], "Fallback"
+        return fallback, "Fallback"
 
 
 # ====================================
-# 7. UI
+# 3. RISQUE UNIQUE (ML + METIER + REGION)
+# ====================================
+def calcul_risque(region, mois, irrigation, t, pl):
+
+    # =========================
+    # ML
+    # =========================
+    if model_ok:
+        try:
+            cols = model_rf.feature_names_in_
+            X = pd.DataFrame(0, index=[0], columns=cols)
+
+            if "mois" in cols:
+                X["mois"] = mois
+
+            region_cols = [c for c in cols if "region_" in c]
+
+            for c in region_cols:
+                if region in c:
+                    X[c] = 1
+
+            if len(region_cols) > 0 and X[region_cols].sum().sum() == 0:
+                X[region_cols[0]] = 1
+
+            ml = model_rf.predict_proba(X)[0][1] * 100
+
+        except:
+            ml = 40
+    else:
+        ml = 40
+
+    # =========================
+    # METIER
+    # =========================
+    region_risk = {
+        "Tunis": 5,
+        "Nabeul": 10,
+        "Bizerte": 8,
+        "Beja": 12,
+        "Sousse": 6,
+        "Monastir": 7,
+        "Kairouan": 15,
+        "Kebili": 20,
+        "Gabes": 18
+    }
+
+    metier = 10 + region_risk.get(region, 10)
+
+    if irrigation == "Non":
+        metier += 15
+
+    # stress climatique simple (même avec NASA ou fallback)
+    if pl < 15:
+        metier += 20
+    if t > 38:
+        metier += 15
+
+    # =========================
+    # SCORE UNIQUE
+    # =========================
+    risk = (0.6 * ml) + (0.4 * metier)
+
+    return max(5, min(95, risk))
+
+
+# ====================================
+# 4. PRIME
+# ====================================
+def calcul_prime(risk, sup, prod):
+
+    valeur = (sup * 180) + (prod * 35)
+    frais = (sup * 12) + (prod * 1.1)
+
+    prime = (risk / 100) * valeur + frais
+
+    return prime, valeur
+
+
+# ====================================
+# 5. UI
 # ====================================
 st.title("🌾 Assurance Agricole Paramétrique 2026")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    region = st.selectbox("Région", list(coords.keys()))
+
+    region = st.selectbox("Région", [
+        "Tunis", "Nabeul", "Bizerte", "Beja",
+        "Sousse", "Monastir", "Kairouan", "Kebili", "Gabes"
+    ])
+
     mois = st.selectbox("Mois", list(range(1, 13)))
-    sup = st.number_input("Superficie", 1, 100, 15)
-    prod = st.number_input("Rendement", 1, 100, 60)
+    sup = st.number_input("Superficie (Ha)", 1, 100, 15)
+    prod = st.number_input("Rendement (T)", 1, 100, 60)
     irrigation = st.radio("Irrigation", ["Oui", "Non"])
 
     btn = st.button("Calculer")
@@ -191,44 +177,25 @@ with col2:
     if btn:
 
         # météo
-        w, source = get_weather(region, mois)
+        (t, pl, hum, vent), source = get_weather(region, mois)
 
-        t, pl, hum, vent = w
-        saison = saisons_map[mois]
+        # risque unique
+        risk = calcul_risque(region, mois, irrigation, t, pl)
 
-        # ML
-        ml = predire_risque_ml(t, pl, hum, vent, mois, region, saison)
+        # prime
+        prime, valeur = calcul_prime(risk, sup, prod)
 
-        # métier
-        metier, exp = calcul_regles_metier(pl, t, irrigation)
-
-        # hybride
-        risque = calcul_risque_hybride(ml, metier)
-
-        # clamp sécurité
-        risque = max(5, min(95, risque))
-
-        # valeur assurée
-        valeur = (sup * 180) + (prod * 35)
-
-        prime_pure = (risque / 100) * valeur
-        frais = (sup * 12) + (prod * 1.1)
-
-        prime = prime_pure + frais
-
-        # indemnité
+        # indemnité simple
         indemnité = 0
-        if pl < 35:
-            indemnité = (35 - pl) * sup * 2
+        if risk > 70:
+            indemnité = sup * 8
 
         # affichage
-        st.subheader("📊 Résultats")
+        st.subheader("📊 Résultat final")
 
-        st.success(f"🔥 ML : {ml:.2f}%")
-        st.warning(f"🧠 Métier : {metier:.2f}%")
-        st.info(f"⚖️ Hybride : {risque:.2f}%")
-
-        st.success(f"💰 Prime : {prime:.2f} DT")
+        st.info(f"🌍 Source météo : {source}")
+        st.metric("🔥 Score de risque", f"{risk:.2f} %")
+        st.success(f"💰 Prime totale : {prime:.2f} DT")
 
         if indemnité > 0:
             st.error(f"🚨 Indemnité : {indemnité:.2f} DT")
@@ -236,20 +203,17 @@ with col2:
             st.success("🍏 Aucun sinistre")
 
         # explication
-        with st.expander("📌 Formules"):
+        with st.expander("📌 Formule"):
 
             st.markdown(f"""
-### ML
-Score basé sur Random Forest
+### 🔹 Risque unique
+Risque = 60% ML + 40% expertise métier + climat
 
-### Métier
-{exp}
-
-### Hybride
-65% ML + 35% métier
-
-### Prime
+### 🔹 Prime
 Prime = Risque × Valeur + frais
 
 Valeur = {valeur:.2f} DT
+
+### 🔹 Données météo
+Source : {source} (NASA POWER ou fallback local)
 """)
