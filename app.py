@@ -12,13 +12,14 @@ st.set_page_config(page_title="Assurance", layout="wide")
 def load_model():
     try:
         return joblib.load("model_rf.pkl"), True
-    except:
+    except Exception as e:
+        st.error(f"Erreur chargement modèle : {e}")
         return None, False
 
 model_rf, model_charge = load_model()
 
 # ====================================
-# 2. FONCTION DE PREDICTION ML SECURISEE
+# 2. FONCTION DE PREDICTION ML CORRIGEE
 # ====================================
 def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
 
@@ -30,26 +31,47 @@ def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
 
         X = pd.DataFrame(0, index=[0], columns=cm)
 
-        X["temp"] = t
-        X["précipitations"] = pl
-        X["humidité"] = hum
-        X["vent"] = vent
-        X["mois"] = mois
-        X["annee"] = 2025
+        # mapping robuste des variables
+        valeurs = {
+            "temp": t,
+            "temperature": t,
 
+            "précipitations": pl,
+            "precipitations": pl,
+
+            "humidité": hum,
+            "humidite": hum,
+
+            "vent": vent,
+            "wind": vent,
+
+            "mois": mois,
+            "annee": 2025,
+            "year": 2025
+        }
+
+        # remplissage automatique
+        for col in cm:
+            if col in valeurs:
+                X[col] = valeurs[col]
+
+        # régions / saisons
         if f"region_{reg}" in X.columns:
             X[f"region_{reg}"] = 1
 
         if f"saison_{sais}" in X.columns:
             X[f"saison_{sais}"] = 1
 
-        return float(model_rf.predict_proba(X)[0][1] * 100)
+        proba = model_rf.predict_proba(X)[0][1]
+        return float(proba * 100)
 
-    except:
+    except Exception as e:
+        st.error(f"Erreur ML : {e}")
         return 20.0
 
+
 # ====================================
-# 3. COORDONNEES, SAISONS & METEO
+# 3. COORDONNEES
 # ====================================
 coords = {
     "Tunis": (36.80, 10.18),
@@ -64,72 +86,19 @@ coords = {
 }
 
 saisons_map = {
-    12: "Hiver",
-    1: "Hiver",
-    2: "Hiver",
-    3: "Printemps",
-    4: "Printemps",
-    5: "Printemps",
-    6: "Ete",
-    7: "Ete",
-    8: "Ete",
-    9: "Automne",
-    10: "Automne",
-    11: "Automne"
+    12: "Hiver", 1: "Hiver", 2: "Hiver",
+    3: "Printemps", 4: "Printemps", 5: "Printemps",
+    6: "Ete", 7: "Ete", 8: "Ete",
+    9: "Automne", 10: "Automne", 11: "Automne"
 }
 
-normales_saisonnieres = {
-
-    "Nabeul": {
-        1: [11.8, 55.2, 74.0, 5.1],
-        2: [12.2, 48.1, 72.0, 5.3],
-        3: [14.1, 38.5, 70.0, 4.8],
-        4: [16.5, 29.0, 68.0, 4.4],
-        5: [20.8, 16.2, 65.0, 4.1],
-        6: [25.2, 5.4, 61.0, 3.9],
-        7: [28.5, 1.1, 59.0, 3.8],
-        8: [29.1, 4.2, 62.0, 3.9],
-        9: [25.8, 35.6, 67.0, 4.2],
-        10: [21.7, 52.0, 71.0, 4.5],
-        11: [16.9, 61.3, 73.0, 4.8],
-        12: [13.1, 64.0, 75.0, 5.2]
-    },
-
-    "Tunis": {
-        1: [11.5, 62.0, 76.0, 4.8],
-        5: [21.2, 22.4, 66.0, 4.2],
-        7: [29.1, 2.5, 57.0, 4.0],
-        8: [29.5, 5.1, 59.0, 4.1]
-    },
-
-    "Beja": {
-        1: [9.8, 95.0, 82.0, 4.5],
-        5: [19.5, 38.0, 68.0, 3.9],
-        7: [28.2, 2.0, 52.0, 3.7],
-        8: [28.6, 4.0, 54.0, 3.8]
-    },
-
-    "Kebili": {
-        1: [10.2, 12.0, 60.0, 3.8],
-        5: [24.8, 6.0, 42.0, 4.9],
-        7: [33.5, 0.5, 33.0, 4.6],
-        8: [33.1, 1.2, 36.0, 4.4]
-    }
-}
+normales_saisonnieres = {}
 
 # ====================================
-# 4. RECUPERATION METEO NASA
+# 4. METEO
 # ====================================
 @st.cache_data(ttl=3600)
 def get_weather(reg, m):
-
-    secours_local = normales_saisonnieres.get(
-        reg,
-        {}
-    ).get(
-        m,
-        [24.5, 12.0, 60.0, 4.0]
-    )
 
     lat, lon = coords[reg]
 
@@ -146,14 +115,12 @@ def get_weather(reg, m):
     }
 
     try:
-
         r = requests.get(url, params=p, timeout=8)
 
         if r.status_code != 200:
-            return secours_local, "Historique (Fallback)"
+            return [24, 10, 60, 3], "Fallback"
 
         d = r.json()["properties"]["parameter"]
-
         k = f"2025{m:02d}"
 
         return [
@@ -161,428 +128,69 @@ def get_weather(reg, m):
             float(d["PRECTOTCORR"][k]),
             float(d["RH2M"][k]),
             float(d["WS2M"][k])
-        ], "NASA POWER API"
+        ], "NASA POWER"
 
     except:
-        return secours_local, "Historique (Fallback)"
+        return [24, 10, 60, 3], "Fallback"
+
 
 # ====================================
-# 5. INTERFACE PRINCIPALE
+# 5. INTERFACE
 # ====================================
-
 st.title("🌾 Assurance Agricole Paramétrique")
 
 if model_charge:
-    st.sidebar.success("🔮 Système ML Initialisé")
+    st.sidebar.success("🔮 Modèle ML chargé")
 else:
-    st.sidebar.warning("⚙️ Mode Règles Métiers Actif")
+    st.sidebar.warning("⚙️ Mode fallback actif")
 
-col1, col2 = st.columns([1, 1.2], gap="medium")
+col1, col2 = st.columns(2)
 
-# ====================================
-# 6. PARAMETRES CONTRAT
-# ====================================
 with col1:
+    region = st.selectbox("Région", list(coords.keys()))
+    mois = st.selectbox("Mois", list(range(1, 13)))
+    sup = st.number_input("Superficie", 1, 100, 15)
+    prod = st.number_input("Rendement", 1, 100, 60)
+    irrigation = st.radio("Irrigation", ["Oui", "Non"])
+    btn = st.button("Analyser")
 
-    st.subheader("📋 Paramètres du Contrat")
-
-    uid = st.text_input(
-        "ID Exploitant",
-        value="TUN-01"
-    )
-
-    region = st.selectbox(
-        "Région de l'exploitation",
-        list(coords.keys()),
-        index=1
-    )
-
-    culture = st.selectbox(
-        "Type de Culture",
-        ["Olives", "Cereales"]
-    )
-
-    irrigation = st.radio(
-        "Système d'Irrigation",
-        ["Oui", "Non"],
-        horizontal=True
-    )
-
-    mois = st.selectbox(
-        "Mois sous risque",
-        list(range(1, 13)),
-        index=7
-    )
-
-    sup = st.number_input(
-        "Superficie Totale (Ha)",
-        min_value=1,
-        value=15
-    )
-
-    prod = st.number_input(
-        "Rendement Estimé (Tonnes)",
-        min_value=1,
-        value=60
-    )
-
-    saison = saisons_map.get(mois, "Ete")
-
-    btn = st.button(
-        "🚀 LANCER L'ANALYSE ACTUARIELLE",
-        use_container_width=True,
-        type="primary"
-    )
-
-# ====================================
-# 7. RESULTATS
-# ====================================
 with col2:
+    w, source = get_weather(region, mois)
+    t, pl, hum, vent = w
 
-    w, source_data = get_weather(region, mois)
+    st.write(f"Météo: {w} ({source})")
 
-    t, pl, hum, vent = w[0], w[1], w[2], w[3]
-
-    t1, t2, t3 = st.tabs([
-        "🌦️ Indices Météo",
-        "📉 Risque & Tarification",
-        "🛡️ Indemnisation Paramétrique"
-    ])
-
-    # ====================================
-    # ONGLET METEO
-    # ====================================
-    with t1:
-
-        st.write(
-            f"**📍 Région :** {region} | "
-            f"**📅 Saison :** {saison}"
-        )
-
-        st.info(
-            f"🌡️ Température : {t:.2f} °C | "
-            f"🌧️ Pluviométrie : {pl:.2f} mm | "
-            f"💧 Humidité : {hum:.2f} % | "
-            f"💨 Vent : {vent:.2f} m/s"
-        )
-
-        if "Fallback" in source_data:
-
-            st.warning(
-                f"⚠️ Mode Simulation : "
-                f"Données issues des "
-                f"**{source_data}** "
-                f"(Moyennes réelles 2014-2024)."
-            )
-
-        else:
-
-            st.success(
-                f"✅ Flux de données en provenance de : "
-                f"**{source_data}**"
-            )
-
-    # ====================================
-    # ANALYSE ACTUARIELLE
-    # ====================================
     if btn:
 
         # ================================
-        # SCORE ML
+        # RISQUE ML + METIER
         # ================================
-        risque_ml = predire_risque_ml(
-            t,
-            pl,
-            hum,
-            vent,
-            mois,
-            region,
-            saison
-        )
+        risque_ml = predire_risque_ml(t, pl, hum, vent, mois, region, "Ete")
 
-        # ================================
-        # REGLES METIERS
-        # ================================
         r_regle = 10
-
-        txt_regle = "Base Standard (10%)"
-
         if pl < 15:
             r_regle += 35
-            txt_regle += " + Stress Hydrique (<15mm : +35%)"
-
         if t > 38:
             r_regle += 25
-            txt_regle += " + Stress Thermique (>38°C : +25%)"
-
         if irrigation == "Non":
             r_regle += 15
-            txt_regle += " + Vulnérabilité Sol (Non irrigué : +15%)"
+
+        risque = (0.7 * risque_ml) + (0.3 * r_regle)
 
         # ================================
-        # RISQUE HYBRIDE
+        # PRIME
         # ================================
-        risque = max(
-            0,
-            min(
-                100,
-                (0.7 * risque_ml) +
-                (0.3 * r_regle)
-            )
-        )
+        valeur_assuree = (sup * 180) + (prod * 35)
 
-        # ================================
-        # VALEUR ASSUREE
-        # ================================
-        valeur_assuree = (
-            (sup * 180) +
-            (prod * 35)
-        )
+        prime_pure = (risque / 100) * valeur_assuree
 
-        # ================================
-        # PRIME PURE
-        # ================================
-        prime_pure = (
-            (risque / 100) *
-            valeur_assuree
-        )
+        frais = (sup * 12) + (prod * 1.1)
 
-        # ================================
-        # CHARGEMENT
-        # ================================
-        frais_ch = (
-            (sup * 12) +
-            (prod * 1.1)
-        )
+        prime = prime_pure + frais
 
-        # ================================
-        # PRIME FINALE
-        # ================================
-        prime = prime_pure + frais_ch
+        st.subheader("Résultats")
 
-        # ====================================
-        # ONGLET TARIFICATION
-        # ====================================
-        with t2:
+        st.metric("Risque", f"{risque:.2f}%")
+        st.metric("Prime", f"{prime:.2f} DT")
 
-            st.subheader("📊 Résultats Actuariels")
-
-            m1, m2 = st.columns(2)
-
-            m1.metric(
-                "🔥 Score de Risque Global",
-                f"{risque:.2f} %"
-            )
-
-            m2.metric(
-                "💳 Prime Totale Facturée",
-                f"{prime:.2f} DT"
-            )
-
-            st.progress(int(risque))
-
-            with st.expander(
-                "🔍 Décomposition de la Formule de Tarification"
-            ):
-
-                st.markdown(f"""
-                * **Modèle de Risque Hybride :**
-                `70% Machine Learning + 30% Expertise Métier`
-
-                * **Détail Calcul Métier :**
-                {txt_regle} = **{r_regle}%**
-
-                * **Valeur Assurée Agricole :**
-                (Superficie × 180 DT)
-                + (Rendement × 35 DT)
-                = **{valeur_assuree:.2f} DT**
-
-                * **Calcul de la Prime Pure :**
-                Risque Global ({risque:.2f}%)
-                × Valeur Assurée
-                = **{prime_pure:.2f} DT**
-
-                * **Chargement de Frais :**
-                (Superficie × 12 DT)
-                + (Rendement × 1.1 DT)
-                = **{frais_ch:.2f} DT**
-
-                * **Formule Finale :**
-                `Prime Totale = Prime Pure + Chargement`
-
-                * **Prime Totale Calculée :**
-                **{prime:.2f} DT**
-                """)
-
-        # ====================================
-        # ONGLET INDEMNISATION
-        # ====================================
-        with t3:
-
-            st.subheader("🛡️ État du Déclencheur")
-
-            cap_max = (
-                (sup * 200) +
-                (prod * 25)
-            )
-
-            ind = 0.0
-            p_rate = 0.0
-            peril = "Aucun"
-
-            txt_form = "Aucune action"
-
-            txt_expl = (
-                "Les indices climatiques "
-                "sont conformes aux normales."
-            )
-
-            # ================================
-            # SECHERESSE
-            # ================================
-            if pl < 35.0:
-
-                peril = "Sécheresse"
-
-                if pl <= 8.0:
-
-                    p_rate = 1.0
-
-                    txt_form = (
-                        "Forfait Catastrophe "
-                        "Intégral (100%)"
-                    )
-
-                    txt_expl = (
-                        f"Pluviométrie ({pl:.2f} mm) "
-                        f"≤ Seuil critique (8 mm)."
-                    )
-
-                else:
-
-                    p_rate = (
-                        (35.0 - pl) /
-                        (35.0 - 8.0)
-                    )
-
-                    txt_form = (
-                        "Indemnisation "
-                        "Linéaire Progressive"
-                    )
-
-                    txt_expl = (
-                        f"Pluviométrie ({pl:.2f} mm) "
-                        f"sous le seuil de confort."
-                    )
-
-                ind = p_rate * cap_max
-
-            # ================================
-            # CANICULE
-            # ================================
-            elif t > 39.0:
-
-                peril = "Canicule"
-
-                if t >= 47.0:
-
-                    p_rate = 1.0
-
-                    txt_form = (
-                        "Forfait Catastrophe "
-                        "Intégral (100%)"
-                    )
-
-                    txt_expl = (
-                        f"Température ({t:.2f} °C) "
-                        f"≥ Limite critique (47 °C)."
-                    )
-
-                else:
-
-                    p_rate = (
-                        (t - 39.0) /
-                        (47.0 - 39.0)
-                    )
-
-                    txt_form = (
-                        "Indemnisation "
-                        "Stress Thermique"
-                    )
-
-                    txt_expl = (
-                        f"Température ({t:.2f} °C) "
-                        f"en zone de flétrissement."
-                    )
-
-                ind = p_rate * cap_max
-
-            # ================================
-            # AFFICHAGE INDEMNITE
-            # ================================
-            if ind > 0:
-
-                st.error(
-                    f"🚨 INDEMNITÉ DÉCLENCHÉE : "
-                    f"{ind:.2f} DT "
-                    f"(Événement : {peril})"
-                )
-
-            else:
-
-                st.success(
-                    "🍏 AUCUN SINISTRE DÉTECTÉ "
-                    "(Indemnité : 0.00 DT)"
-                )
-
-            with st.expander(
-                "🔍 Paramètres du Smart Contract"
-            ):
-
-                st.markdown(f"""
-                * **Capitaux Maximums Exposés :**
-                (Superficie × 200 DT)
-                + (Rendement × 25 DT)
-                = **{cap_max:.2f} DT**
-
-                * **Règle de Calcul Indiciaire :**
-                `{txt_form}`
-
-                * **Justification Biologique :**
-                {txt_expl}
-
-                * *Note Académique :*
-                L'indemnité est pilotée par
-                les indices climatiques NASA,
-                sans expertise physique terrain.
-                """)
-
-            # ====================================
-            # TELEGRAM
-            # ====================================
-            tok = st.secrets.get("BOT_TOKEN", "")
-            cid = st.secrets.get("CHAT_ID", "")
-
-            if tok and cid:
-
-                txt = (
-                    f"🌾 ASSURANCE\n"
-                    f"👤 ID: {uid}\n"
-                    f"📈 Risque: {risque:.2f}%\n"
-                    f"💰 Prime: {prime:.2f} DT\n"
-                    f"🛡️ Indemnité: {ind:.2f} DT"
-                )
-
-                try:
-
-                    requests.post(
-                        f"https://api.telegram.org/bot{tok}/sendMessage",
-                        data={
-                            "chat_id": cid,
-                            "text": txt
-                        },
-                        timeout=3
-                    )
-
-                except:
-                    pass
+        st.progress(int(risque))
