@@ -97,7 +97,7 @@ with col2:
                 ind = p_rate * cap_max
             
             if ind > 0: st.error(f"💰 Indemnite Declenchee : {ind:.2f} DT ({peril})")
-            else: st.success("🍏 Indemnite Calculee : 0.00 DT (Aucun seuil franchi)")
+            else: st.success("Indemnite Calculee : 0.00 DT (Aucun seuil franchi)")
             
             tok, cid = st.secrets.get("BOT_TOKEN", ""), st.secrets.get("CHAT_ID", "")
             if tok and cid:
