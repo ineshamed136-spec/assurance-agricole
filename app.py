@@ -28,7 +28,7 @@ def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
         X["humidité"] = hum
         X["vent"] = vent
         X["mois"] = mois
-        X["annee"] = 2026 # Mise à jour 2026
+        X["annee"] = 2026
         if f"region_{reg}" in X.columns: 
             X[f"region_{reg}"] = 1
         if f"saison_{sais}" in X.columns: 
@@ -67,111 +67,66 @@ def get_weather(reg, m):
     secours_local = normales_saisonnieres.get(reg, {}).get(m, [24.5, 12.0, 60.0, 4.0])
     lat, lon = coords[reg]
     url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
-    # Mise à jour 2026 pour l'API NASA
     p = {"parameters": "T2M,PRECTOTCORR,RH2M,WS2M", "community": "AG", "longitude": lon, "latitude": lat, "start": "2026", "end": "2026", "format": "JSON"}
     try:
         r = requests.get(url, params=p, timeout=8)
-        if r.status_code != 200: 
-            return secours_local, "Historique Réel (Fallback)"
+        if r.status_code != 200: return secours_local, "Historique Réel (Fallback)"
         d = r.json()["properties"]["parameter"]
-        k = f"2026{m:02d}" # Clé 2026
+        k = f"2026{m:02d}"
         return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])], "NASA POWER API"
-    except: 
-        return secours_local, "Historique Réel (Fallback)"
+    except: return secours_local, "Historique Réel (Fallback)"
 
 # ====================================
 # 4. INTERFACE GRAPHIQUE
 # ====================================
 st.title("🌾 Assurance Agricole Paramétrique (2026)")
-if model_charge: st.sidebar.success("🔮 Système ML Initialisé")
-else: st.sidebar.warning("⚙️ Mode Règles Métiers Actif")
-
 col1, col2 = st.columns([1, 1.2], gap="medium")
 with col1:
     st.subheader("📋 Paramètres du Contrat")
     uid = st.text_input("ID Exploitant", value="TUN-01")
-    region = st.selectbox("Région de l'exploitation", list(coords.keys()), index=1)
+    region = st.selectbox("Région", list(coords.keys()), index=1)
     culture = st.selectbox("Type de Culture", ["Olives", "Cereales"])
-    irrigation = st.radio("Système d'Irrigation", ["Oui", "Non"], horizontal=True)
-    mois = st.selectbox("Mois sous risque", list(range(1, 13)), index=4) # Mai est le mois 5
-    sup = st.number_input("Superficie Totale (Ha)", min_value=1, value=15)
-    prod = st.number_input("Rendement Estimé (Tonnes)", min_value=1, value=60)
-    
+    irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
+    mois = st.selectbox("Mois sous risque", list(range(1, 13)), index=4)
+    sup = st.number_input("Superficie (Ha)", min_value=1, value=15)
+    prod = st.number_input("Rendement (Tonnes)", min_value=1, value=60)
     saison = saisons_map.get(mois, "Ete")
-    btn = st.button("🚀 LANCER L'ANALYSE ACTUARIELLE", use_container_width=True, type="primary")
+    btn = st.button("🚀 LANCER L'ANALYSE", use_container_width=True, type="primary")
 
 with col2:
-    w, source_data = get_weather(region, mois)
+    w, source = get_weather(region, mois)
     t, pl, hum, vent = w[0], w[1], w[2], w[3]
-    t1, t2, t3 = st.tabs(["🌦️ Indices Météo", "📉 Risque & Tarification", "🛡️ Indemnisation Paramétrique"])
+    t1, t2, t3 = st.tabs(["🌦️ Indices Météo", "📉 Risque & Prime", "🛡️ Indemnisation"])
     
     with t1:
-        st.write(f"**📍 Région :** {region} | **📅 Saison :** {saison}")
-        st.info(f"🌡️ Température : {t:.2f} °C | 🌧️ Pluviométrie : {pl:.2f} mm | 💧 Humidité : {hum:.2f} % | 💨 Vent : {vent:.2f} m/s")
-        if "Fallback" in source_data:
-            st.warning(f"⚠️ Mode Simulation : Données issues des **{source_data}**.")
-        else:
-            st.success(f"✅ Flux de données en provenance de : **{source_data}**")
+        st.info(f"🌡️ Temp: {t:.2f} °C | 🌧️ Pluie: {pl:.2f} mm | 💧 Hum: {hum:.2f} %")
+        st.write(f"Source des données : **{source}**")
     
     if btn:
         risque_ml = predire_risque_ml(t, pl, hum, vent, mois, region, saison)
-        r_regle = 10
-        txt_regle = "Base Standard (10%)"
-        if pl < 15: 
-            r_regle += 35
-            txt_regle += " + Stress Hydrique (<15mm : +35%)"
-        if t > 38: 
-            r_regle += 25
-            txt_regle += " + Stress Thermique (>38C : +25%)"
-        if irrigation == "Non": 
-            r_regle += 15
-            txt_regle += " + Vulnérabilité Sol (Non-irrigué : +15%)"
-        
+        r_regle = 10 + (35 if pl < 15 else 0) + (25 if t > 38 else 0) + (15 if irrigation == "Non" else 0)
         risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
-        prime_pure = risque * 4.2
-        frais_ch = (sup * 12) + (prod * 1.1)
-        prime = prime_pure + frais_ch
+        prime = (risque * 4.2) + (sup * 12) + (prod * 1.1)
         
         with t2:
-            st.subheader("📊 Résultats Actuariels")
-            m1, m2 = st.columns(2)
-            m1.metric("🔥 Score de Risque Global", f"{risque:.2f} %")
-            m2.metric("💳 Prime Totale Facturée", f"{prime:.2f} DT")
-            st.progress(int(risque))
-            
+            st.metric("🔥 Score de Risque Global", f"{risque:.2f} %")
+            st.metric("💳 Prime Totale", f"{prime:.2f} DT")
+            with st.expander("🔍 Voir les détails de calcul"):
+                st.write(f"Prime Pure = Risque ({risque:.2f}%) * 4.2")
+                st.write(f"Chargement = (Sup {sup} * 12) + (Prod {prod} * 1.1)")
+        
         with t3:
-            st.subheader("🛡️ État du Déclencheur (Trigger)")
             cap_max = (sup * 200) + (prod * 25)
-            ind, p_rate, peril = 0.0, 0.0, "Aucun"
-            txt_form, txt_expl = "Aucune action", "Les indices climatiques sont normaux."
-            
+            ind, peril = 0.0, "Normal"
             if pl < 35.0:
                 peril = "Sécheresse"
-                if pl <= 8.0:
-                    p_rate, txt_form, txt_expl = 1.0, "Forfait Catastrophe Intégral (100%)", f"Pluviométrie ({pl:.2f} mm) ≤ Seuil Critique (8 mm)."
-                else:
-                    p_rate = (35.0 - pl) / (35.0 - 8.0)
-                    txt_form = "Indemnisation Linéaire Progressive"
-                    txt_expl = f"Pluviométrie ({pl:.2f} mm) sous le seuil de confort (35 mm)."
-                ind = p_rate * cap_max
-            elif t > 39.0:
-                peril = "Canicule"
-                if t >= 47.0:
-                    p_rate, txt_form, txt_expl = 1.0, "Forfait Catastrophe Intégral (100%)", f"Température ({t:.2f} C) ≥ Limite (47 C)."
-                else:
-                    p_rate = (t - 39.0) / (47.0 - 39.0)
-                    txt_form = "Indemnisation Stress Thermique"
-                    txt_expl = f"Température ({t:.2f} C) en zone de flétrissement."
-                ind = p_rate * cap_max
+                ind = ((35.0 - pl) / 27.0) * cap_max if pl > 8 else cap_max
             
-            if ind > 0: st.error(f"🚨 INDEMNITÉ DÉCLENCHÉE : {ind:.2f} DT (Événement : {peril})")
-            else: st.success("🍏 AUCUN SINISTRE DÉTECTÉ")
-            
-            # Affichage JSON pour l'encadrant
-            with st.expander("🛠️ Zone Développeur : Visualiser le document JSON"):
-                st.json({
-                    "annee": 2026,
-                    "id_exploitant": uid,
-                    "risques": {"ml": risque_ml, "regles": r_regle, "global": risque},
-                    "indemnite": {"montant": ind, "peril": peril}
-                })
+            if ind > 0: st.error(f"🚨 INDEMNITÉ : {ind:.2f} DT ({peril})")
+            else: st.success("🍏 AUCUN SINISTRE")
+            with st.expander("🔍 Voir le calcul de l'indemnité"):
+                st.write(f"Capital Maximum = {cap_max:.2f} DT")
+                st.write("Indemnisation basée sur l'oracle satellite.")
+
+            with st.expander("🛠️ Zone Développeur : JSON"):
+                st.json({"annee": 2026, "id": uid, "risque": risque, "indemnite": ind})
