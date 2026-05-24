@@ -15,9 +15,9 @@ st.set_page_config(
 @st.cache_resource
 def load_model():
     try:
-        dossier_actuel = os.path.dirname(__file__)
-        chemin_modele = os.path.join(dossier_actuel, "model.pkl")
-        m = joblib.load(chemin_modele)
+        dossier = os.path.dirname(__file__)
+        chemin = os.path.join(dossier, "model.pkl")
+        m = joblib.load(chemin)
         return m, True
     except:
         return None, False
@@ -42,10 +42,7 @@ coords = {
 @st.cache_data(ttl=3600)
 def get_weather(reg, m):
     lat, lon = coords[reg]
-    url = (
-        "https://power.larc.nasa.gov"
-        "/api/temporal/monthly/point"
-    )
+    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
     p = {
         "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
         "community": "AG",
@@ -56,10 +53,39 @@ def get_weather(reg, m):
         "format": "JSON"
     }
     try:
-        r = requests.get(
-            url,
-            params=p,
-            timeout=8
-        )
+        r = requests.get(url, params=p, timeout=8)
         if r.status_code != 200:
-            return
+            return [24.5, 12.0, 60.0, 4.0]
+        d = r.json()["properties"]["parameter"]
+        k = f"2025{m:02d}"
+        return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
+    except:
+        return [24.5, 12.0, 60.0, 4.0]
+
+# ==================================
+# 3. INTERFACE UTILISATEUR
+# ==================================
+st.title("🌾 Assurance Agricole")
+
+col1, col2 = st.columns([1, 1.2], gap="medium")
+
+with col1:
+    st.subheader("Contrat")
+    uid = st.text_input("ID Exploitant", value="TUN-01")
+    region = st.selectbox("Region", list(coords.keys()), index=1)
+    culture = st.selectbox("Culture", ["Olives", "Cereales"])
+    irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
+    mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=4)
+    sup = st.number_input("Superficie (Ha)", min_value=1, value=15)
+    prod = st.number_input("Rendement (T)", min_value=1, value=60)
+
+    if mois in [12, 1, 2]:
+        saison = "Hiver"
+    elif mois in [3, 4, 5]:
+        saison = "Printemps"
+    elif mois in [6, 7, 8]:
+        saison = "Ete"
+    else:
+        saison = "Automne"
+
+    btn = st.button("🚀 ANALYSER", use_container_width=True, type="
