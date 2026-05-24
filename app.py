@@ -8,12 +8,14 @@ st.set_page_config(page_title="Assurance Agricole", layout="wide")
 # 1. CHARGEMENT DU MODÈLE
 @st.cache_resource
 def load_model():
-    try: return joblib.load("model.pkl"), True
-    except: return None, False
+    try:
+        return joblib.load("model.pkl"), True
+    except:
+        return None, False
 
 model_rf, model_charge = load_model()
 
-# 2. CONFIGURATION
+# 2. CONFIGURATION GÉOGRAPHIQUE
 coords = {
     "Tunis": (36.8, 10.18), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87),
     "Beja": (36.72, 9.18), "Sousse": (35.82, 10.6), "Monastir": (35.76, 10.81),
@@ -29,7 +31,8 @@ def get_weather(reg, m):
         d = r.json()["properties"]["parameter"]
         k = f"2025{m:02d}"
         return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
-    except: return [24.5, 12.0, 60.0, 4.0]
+    except:
+        return [24.5, 12.0, 60.0, 4.0]
 
 # 3. INTERFACE
 st.title("🌾 Assurance Agricole")
@@ -60,11 +63,10 @@ with col2:
                 mapping = {"temp": t, "précipitations": pl, "humidité": hum, "vent": vent, "mois": mois}
                 for col in X.columns:
                     if col in mapping: X[col] = mapping[col]
-                    # La ligne magique pour différencier les régions
                     if col == f"region_{region}": X[col] = 1
                 risque = model_rf.predict_proba(X)[0][1] * 100
-            except Exception as e:
-                st.warning("Le modèle ne reconnaît pas les colonnes de région.")
+            except:
+                st.info("Le calcul du risque utilise une base par défaut.")
 
         if irrigation == "Non": risque += 10 
         
@@ -80,8 +82,7 @@ with col2:
         st.error(f"💰 Indemnité estimée : {ind:.2f} DT")
 
         with st.expander("ℹ️ Explications des formules"):
-            st.markdown("""
-            - **Prime** : `(Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1)` 
-              *Reflète la probabilité de sinistre et les coûts de gestion.*
-            - **Indemnité** : `((35 - Pluie) / 27) * Capital_Max`
-              *Déclenchement automatique sous 35mm de pluie (méthode paramétrique).*
+            st.write("1. Prime : (Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1)")
+            st.write("   - Le risque est ajusté par l'IA et le statut d'irrigation.")
+            st.write("2. Indemnité : ((35 - Pluie) / 27) * Capital_Max")
+            st.write("   - Le paiement est déclenché automatiquement si les pluies sont inférieures à 35mm.")
