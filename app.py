@@ -6,11 +6,7 @@ import requests
 # ==========================================
 # 1. CONFIGURATION DE LA PAGE (Dashboard Wide)
 # ==========================================
-st.set_page_config(
-    page_title="Assurance Agricole Intelligente",
-    page_icon="🌾",
-    layout="wide"
-)
+st.set_page_config(page_title="Assurance Agricole Intelligente", page_icon="🌾", layout="wide")
 
 # Style CSS personnalisé pour embellir l'interface
 st.markdown("""
@@ -63,25 +59,15 @@ def envoyer_alerte(user_id, region, risque, saison, statut_indemnite):
 💰 *Résultat :* {statut_indemnite}
 """
     try:
-        requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            data={"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"},
-            timeout=5
-        )
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}, timeout=5)
     except:
         pass
 
 # Coordonnées géographiques des gouvernorats de la Tunisie
 coords = {
-    "Tunis": (36.8065, 10.1815), 
-    "Nabeul": (36.45, 10.73), 
-    "Bizerte": (37.27, 9.87),
-    "Beja": (36.72, 9.18), 
-    "Sousse": (35.82, 10.60), 
-    "Monastir": (35.76, 10.81),
-    "Kairouan": (35.67, 10.09), 
-    "Kebili": (33.70, 8.97), 
-    "Gabes": (33.88, 10.09),
+    "Tunis": (36.8065, 10.1815), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87),
+    "Beja": (36.72, 9.18), "Sousse": (35.82, 10.60), "Monastir": (35.76, 10.81),
+    "Kairouan": (35.67, 10.09), "Kebili": (33.70, 8.97), "Gabes": (33.88, 10.09),
     "Medenine": (33.35, 10.50)
 }
 
@@ -96,10 +82,8 @@ def get_weather(region, mois, annee=2025):
     params = {
         "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
         "community": "AG",
-        "longitude": lon, 
-        "latitude": lat,
-        "start": str(annee), 
-        "end": str(annee),
+        "longitude": lon, "latitude": lat,
+        "start": str(annee), "end": str(annee),
         "format": "JSON"
     }
     
@@ -110,7 +94,6 @@ def get_weather(region, mois, annee=2025):
             
         data = r.json()  
         p = data["properties"]["parameter"]  
-        
         key = f"{annee}{mois:02d}"
         
         temp = float(p.get("T2M", {}).get(key, 25.0))
@@ -119,8 +102,7 @@ def get_weather(region, mois, annee=2025):
         vent = float(p.get("WS2M", {}).get(key, 4.0))
         
         return temp, pluie, humidite, vent
-        
-    except Exception as e:
+    except:
         return None
 
 # ==========================================
@@ -129,7 +111,6 @@ def get_weather(region, mois, annee=2025):
 st.title("🌾 Système Décisionnel d'Assurance Agricole Paramétrique")
 st.markdown("---")
 
-# Division de l'écran en deux grands blocs horizontaux
 col_formulaire, col_dashboard = st.columns([1, 1.3], gap="medium")
 
 # --- BLOC DE GAUCHE : SAISIE DES DONNÉES UTILISATEUR ---
@@ -146,38 +127,4 @@ with col_formulaire:
     with c3:
         culture = st.selectbox("🌱 Culture", ["Olives", "Céréales"])
     with c4:
-        irrigation = st.radio("💧 Irrigation artificielle", ["Oui", "Non"], horizontal=True)
-
-    c5, c6, c7 = st.columns(3)
-    with c5:
-        mois = st.selectbox("📅 Mois", list(range(1, 13)), index=4)
-    with c6:
-        superficie = st.number_input("📏 Superficie (Ha)", min_value=1, value=15)
-    with c7:
-        production = st.number_input("🚜 Rendement attendu (T)", min_value=1, value=60)
-
-    # Calcul automatique de la saison
-    if mois in [12, 1, 2]: saison = "Hiver"
-    elif mois in [3, 4, 5]: saison = "Printemps"
-    elif mois in [6, 7, 8]: saison = "Été"
-    else: saison = "Automne"
-    
-    st.write(f"🍂 *Période rattachée : Période de l'{saison}*")
-    btn_analyser = st.button("🚀 EXÉCUTER L'ANALYSE DES SEUILS", use_container_width=True, type="primary")
-
-# --- BLOC DE DROITE : PANNEAU DES RÉSULTATS VISUELS & EXPLICATIONS ---
-with col_dashboard:
-    if not user_id:
-        st.warning("👈 Veuillez renseigner l'Identifiant Exploitant à gauche pour activer le Dashboard.")
-        st.stop()
-        
-    # Extraction de la météo réelle
-    weather = get_weather(region, mois)
-    if weather is None:
-        st.error("❌ Données climatiques de la NASA temporairement indisponibles.")
-        st.stop()
-        
-    temp, pluie, humidite, vent = weather
-    
-    # Création des onglets horizontaux pour éviter la descente infinie de la page
-    tab1, tab2, tab3 = st.tabs(
+        irrigation = st.radio("💧 Irrigation artificielle", ["Oui", "Non"], horizontal
