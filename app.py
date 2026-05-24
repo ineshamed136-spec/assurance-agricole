@@ -72,4 +72,69 @@ def get_weather(reg, m):
         v_w = float(d["WS2M"][k])
         return [v_t, v_p, v_h, v_w]
     except:
-        return
+        return [24.5, 12.0, 60.0, 4.0]
+
+# ==================================
+# 3. INTERFACE UTILISATEUR
+# ==================================
+st.title("🌾 Assurance Agricole")
+
+col1, col2 = st.columns(
+    [1, 1.2],
+    gap="medium"
+)
+
+with col1:
+    st.subheader("Contrat")
+    uid = st.text_input(
+        "ID Exploitant",
+        value="TUN-01"
+    )
+    region = st.selectbox(
+        "Region",
+        list(coords.keys()),
+        index=1
+    )
+    culture = st.selectbox(
+        "Culture",
+        ["Olives", "Cereales"]
+    )
+    irrigation = st.radio(
+        "Irrigation",
+        ["Oui", "Non"],
+        horizontal=True
+    )
+    mois = st.selectbox(
+        "Mois (1-12)",
+        list(range(1, 13)),
+        index=4
+    )
+    sup = st.number_input(
+        "Superficie (Ha)",
+        min_value=1,
+        value=15
+    )
+    prod = st.number_input(
+        "Rendement (T)",
+        min_value=1,
+        value=60
+    )
+
+    if mois in [12, 1, 2]:
+        saison = "Hiver"
+    elif mois in [3, 4, 5]:
+        saison = "Printemps"
+    elif mois in [6, 7, 8]:
+        saison = "Ete"
+    else:
+        saison = "Automne"
+
+    btn = st.button(
+        "🚀 ANALYSER",
+        use_container_width=True,
+        type="primary"
+    )
+
+with col2:
+    w = get_weather(region, mois)
+    t, pl, hum, vent = w[0], w[1],
