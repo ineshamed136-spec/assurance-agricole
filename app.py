@@ -6,7 +6,7 @@ import requests
 st.set_page_config(page_title="Assurance Agricole", layout="wide")
 
 # ====================================
-# MODELE
+# 1. MODELE ML
 # ====================================
 @st.cache_resource
 def load_model():
@@ -19,7 +19,7 @@ model_rf, model_ok = load_model()
 
 
 # ====================================
-# ML RISK
+# 2. PREDICTION ML (ROBUSTE)
 # ====================================
 def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
 
@@ -34,6 +34,7 @@ def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
             "temp": t,
             "temperature": t,
             "précipitations": pl,
+            "humidite": hum,
             "humidité": hum,
             "vent": vent,
             "mois": mois,
@@ -57,7 +58,7 @@ def predire_risque_ml(t, pl, hum, vent, mois, reg, sais):
 
 
 # ====================================
-# DATA REGION
+# 3. DONNEES REGION
 # ====================================
 coords = {
     "Tunis": (36.80, 10.18),
@@ -80,22 +81,58 @@ saisons_map = {
 
 
 # ====================================
-# METEO (fallback simple)
+# 4. METEO SAFE (ANTI CRASH)
 # ====================================
-def get_weather(region, mois):
-    return [25, 10, 60, 3], "Simulation"
+def get_weather(reg, m):
+
+    try:
+        lat, lon = coords[reg]
+
+        url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
+
+        params = {
+            "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
+            "community": "AG",
+            "longitude": lon,
+            "latitude": lat,
+            "start": "2025",
+            "end": "2025",
+            "format": "JSON"
+        }
+
+        r = requests.get(url, params=params, timeout=8)
+
+        if r.status_code != 200:
+            return [25, 10, 60, 3], "Fallback"
+
+        d = r.json()["properties"]["parameter"]
+        k = f"2025{m:02d}"
+
+        return [
+            float(d["T2M"][k]),
+            float(d["PRECTOTCORR"][k]),
+            float(d["RH2M"][k]),
+            float(d["WS2M"][k])
+        ], "NASA API"
+
+    except:
+        return [25, 10, 60, 3], "Fallback"
 
 
 # ====================================
-# UI
+# 5. INTERFACE
 # ====================================
-st.title("🌾 Assurance Agricole Paramétrique (Version Pro)")
+st.title("🌾 Assurance Agricole Paramétrique")
+
+if model_ok:
+    st.sidebar.success("ML actif")
+else:
+    st.sidebar.warning("Mode règles")
+
 
 col1, col2 = st.columns(2)
 
 with col1:
-
-    st.subheader("📋 Paramètres")
 
     region = st.selectbox("Région", list(coords.keys()))
     mois = st.selectbox("Mois", list(range(1, 13)))
@@ -103,7 +140,7 @@ with col1:
     prod = st.number_input("Rendement (T)", 1, 100, 60)
     irrigation = st.radio("Irrigation", ["Oui", "Non"])
 
-    btn = st.button("🔍 Calculer")
+    btn = st.button("Calculer")
 
 
 with col2:
@@ -113,98 +150,89 @@ with col2:
         # ====================================
         # METEO
         # ====================================
-        t, pl, hum, vent = get_weather(region, mois)
+        w, source = get_weather(region, mois)
+
+        if not isinstance(w, list) or len(w) != 4:
+            w = [25, 10, 60, 3]
+
+        t, pl, hum, vent = w
 
         saison = saisons_map[mois]
 
         # ====================================
-        # RISQUE ML
+        # RISQUE
         # ====================================
         ml = predire_risque_ml(t, pl, hum, vent, mois, region, saison)
 
-        # ====================================
-        # RISQUE METIER
-        # ====================================
-        r = 10
+        metier = 10
+
         exp = "Base 10%"
 
         if pl < 15:
-            r += 35
-            exp += " + Sécheresse"
+            metier += 35
+            exp += " + sécheresse"
 
         if t > 38:
-            r += 25
-            exp += " + Chaleur"
+            metier += 25
+            exp += " + chaleur"
 
         if irrigation == "Non":
-            r += 15
-            exp += " + Non irrigué"
+            metier += 15
+            exp += " + non irrigué"
+
+        risque = (0.7 * ml) + (0.3 * metier)
 
         # ====================================
-        # RISQUE FINAL
-        # ====================================
-        risque = (0.7 * ml) + (0.3 * r)
-
-        # ====================================
-        # VALEUR ASSUREE
+        # PRIME
         # ====================================
         valeur = (sup * 180) + (prod * 35)
 
-        # ====================================
-        # PRIME PURE
-        # ====================================
         prime_pure = (risque / 100) * valeur
 
-        # ====================================
-        # FRAIS
-        # ====================================
         frais = (sup * 12) + (prod * 1.1)
 
-        prime_totale = prime_pure + frais
+        prime = prime_pure + frais
 
         # ====================================
         # INDEMNITE
         # ====================================
-        seuil_secheresse = 35
+        seuil = 35
         indemnité = 0
 
-        if pl < seuil_secheresse:
-            indemnité = (seuil_secheresse - pl) * sup * 2
+        if pl < seuil:
+            indemnité = (seuil - pl) * sup * 2
 
         # ====================================
-        # RESULTATS
+        # AFFICHAGE
         # ====================================
         st.subheader("📊 Résultats")
 
-        st.success(f"Risque global : {risque:.2f} %")
-        st.info(f"Prime totale : {prime_totale:.2f} DT")
+        st.success(f"Risque global : {risque:.2f}%")
+        st.info(f"Prime totale : {prime:.2f} DT")
 
         if indemnité > 0:
-            st.error(f"🚨 Indemnité déclenchée : {indemnité:.2f} DT")
+            st.error(f"🚨 Indemnité : {indemnité:.2f} DT")
         else:
-            st.success("🍏 Aucun sinistre détecté")
+            st.success("🍏 Aucun sinistre")
 
         # ====================================
-        # EXPLICATION PROPRE
+        # FORMULES
         # ====================================
         with st.expander("📌 Formules utilisées"):
 
             st.markdown(f"""
-### 🔹 Risque global
-Risque = 70% ML + 30% métier
+### Risque global
+70% ML + 30% métier
 
-### 🔹 Valeur assurée
-Valeur = Superficie × 180 + Rendement × 35 = **{valeur:.2f} DT**
+### Valeur assurée
+{sup} × 180 + {prod} × 35 = {valeur:.2f} DT
 
-### 🔹 Prime pure
-Prime = Risque × Valeur
+### Prime pure
+Risque × Valeur assurée
 
-### 🔹 Frais
-Frais = Superficie × 12 + Rendement × 1.1
+### Frais
+{sup} × 12 + {prod} × 1.1
 
-### 🔹 Prime totale
-Prime totale = Prime pure + Frais
-
-### 🔹 Indemnité
-Basée sur le déficit de pluie (stress hydrique)
+### Indemnité
+Basée sur la sécheresse (pluie < 35 mm)
 """)
