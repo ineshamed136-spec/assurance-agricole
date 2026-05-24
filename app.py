@@ -106,7 +106,7 @@ with col2:
         st.info(f"Temp: {t:.2f}°C | Pluie: {pl:.2f}mm")
     
     if btn:
-        # --- 1. CALCUL DU MACHINE LEARNING (LIGNES ULTRA-COURTES) ---
+        # --- 1. CALCUL DU MACHINE LEARNING ---
         risque_ml = 20.0
         if model_charge:
             try:
@@ -138,21 +138,4 @@ with col2:
         r_regle = 10
         if pl < 35: 
             r_regle += max(0, int((35 - pl) * 2.0))
-        if t > 30: 
-            r_regle += max(0, int((t - 30) * 3.5))
-        if irrigation == "Non": 
-            r_regle += 15
-        
-        # --- 3. COMBINAISON ET AFFICHAGE ---
-        risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
-        prime = (risque * 4.2) + (sup * 12) + (prod * 1.1)
-        
-        with t2:
-            st.markdown("### Tarification")
-            st.metric("🔥 Risque Global", f"{risque:.2f} %")
-            st.metric("💳 Prime Calculée", f"{prime:.2f} DT")
-            st.progress(int(risque))
-            
-            with st.expander("📝 Formule"):
-                st.write("ML (70%) + Expert (30%).")
-                st.latex(r"Prime = (Risque \times 4.2) + (Sup \times 12)
+        if t >
