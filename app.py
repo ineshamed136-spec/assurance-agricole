@@ -100,7 +100,6 @@ with col2:
     w = get_weather(region, mois)
     t, pl, hum, vent = w[0], w[1], w[2], w[3]
     
-    # Structure simplifiée sur plusieurs lignes pour éviter les coupures
     noms_onglets = ["🌦️ Météo", "📉 Risque", "🛡️ Indemnité"]
     t1, t2, t3 = st.tabs(noms_onglets)
     
@@ -137,9 +136,4 @@ with col2:
         else:
             risque_ml = max(10.0, min(90.0, t * 2.2))
 
-        # --- 2. RÈGLES MÉTIER AGRONOMIQUES ---
-        r_regle = 10
-        if pl < 35: 
-            r_regle += max(0, int((35 - pl) * 2.0))
-        if t > 30: 
-            r_regle += max(0, int((t - 30) * 3.
+        # ---
