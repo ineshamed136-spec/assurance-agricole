@@ -109,4 +109,8 @@ def get_weather(region, mois, annee=2025):
             return None
             
         data = r.json()  
-        p =
+        p = data["properties"]["parameter"]  # Ligne 112 sécurisée et complétée ici
+        
+        key = f"{annee}{mois:02d}"
+        temp = p.get("T2M", {}).get(key, 25.0)
+        pluie = p.get("PRECTOTCORR", {}).get(
