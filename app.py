@@ -3,8 +3,11 @@ import joblib
 import pandas as pd
 import requests
 
-st.set_page_config(page_title="Assurance", layout="wide")
+st.set_page_config(page_title="Assurance Paramétrique", layout="wide")
 
+# ====================================
+# 1. CHARGEMENT DU MODELE ML
+# ====================================
 @st.cache_resource
 def load_model():
     try: return joblib.load("model_rf.pkl"), True
@@ -17,6 +20,9 @@ coords = {
     "Kairouan": (35.67, 10.09), "Kebili": (33.70, 8.97), "Gabes": (33.88, 10.09)
 }
 
+# ====================================
+# 2. COLLECTE DES DONNÉES SATELLITES
+# ====================================
 @st.cache_data(ttl=3600)
 def get_weather(reg, m):
     lat, lon = coords[reg]
@@ -30,11 +36,13 @@ def get_weather(reg, m):
         return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
     except: return [24.5, 12.0, 60.0, 4.0]
 
-st.title("🌾 Assurance Agricole Paramétrique")
-if model_charge: st.sidebar.success("ML Actif")
-else: st.sidebar.warning("Mode Regles Metiers")
+# ====================================
+# 3. INTERFACE DE CONTROLE COMPACTE
+# ====================================
+st.title("🌾 Plateforme d'Assurance Agricole Paramétrique")
 
 col1, col2 = st.columns([1, 1.2], gap="medium")
+
 with col1:
     st.subheader("Contrat")
     uid = st.text_input("ID Exploitant", value="TUN-01")
@@ -50,14 +58,14 @@ with col1:
 with col2:
     w = get_weather(region, mois)
     t, pl, hum, vent = w[0], w[1], w[2], w[3]
-    t1, t2, t3 = st.tabs(["🌦️ Meteo", "📉 Risque", "🛡️ Indemnite"])
+    t1, t2, t3 = st.tabs(["🌦️ Données Météo", "📉 Évaluation du Risque", "🛡️ Indemnisation"])
     
     with t1:
-        st.write(f"**Region :** {region} | **Saison :** {saison}")
+        st.write(f"**Région :** {region} | **Saison :** {saison}")
         st.info(f"🌡️ Temp: {t:.2f} °C | 🌧️ Pluie: {pl:.2f} mm | 💧 Hum: {hum:.2f} % | 💨 Vent: {vent:.2f} m/s")
     
-    # Calculs automatiques lancés si le bouton ANALYSER est cliqué
     if btn:
+        # --- Calcul du score Random Forest ---
         risque_ml = 20.0
         if model_charge:
             try:
@@ -65,42 +73,4 @@ with col2:
                 X["temp"], X["précipitations"], X["humidité"], X["vent"], X["mois"], X["annee"] = t, pl, hum, vent, mois, 2025
                 if f"region_{region}" in X.columns: X[f"region_{region}"] = 1
                 if f"saison_{saison}" in X.columns: X[f"saison_{saison}"] = 1
-                risque_ml = model_rf.predict_proba(X)[0][1] * 100
-            except: pass
-
-        r_regle = 10
-        if pl < 15: r_regle += 35
-        if t > 38: r_regle += 25
-        if irrigation == "Non": r_regle += 15
-        
-        risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
-        prime = (risque * 4.2) + (sup * 12) + (prod * 1.1)
-        
-        with t2:
-            st.markdown("### Estimation Actuarielle")
-            st.metric("🔥 Taux de Risque Global", f"{risque:.2f} %")
-            st.metric("💳 Prime Pure Calculee", f"{prime:.2f} DT")
-            st.progress(int(risque))
-            
-        with t3:
-            st.markdown("### Calcul de l'Indemnité")
-            cap_max = (sup * 200) + (prod * 25)
-            ind, peril = 0.0, "Conditions Normales"
-            
-            if pl < 35.0:
-                peril = "Secheresse"
-                p_rate = 1.0 if pl <= 8.0 else (35.0 - pl) / (35.0 - 8.0)
-                ind = p_rate * cap_max
-            elif t > 39.0:
-                peril = "Canicule"
-                p_rate = 1.0 if t >= 47.0 else (t - 39.0) / (47.0 - 39.0)
-                ind = p_rate * cap_max
-            
-            if ind > 0: st.error(f"💰 Indemnite Declenchee : {ind:.2f} DT ({peril})")
-            else: st.success("Indemnite Calculee : 0.00 DT (Aucun seuil franchi)")
-            
-            tok, cid = st.secrets.get("BOT_TOKEN", ""), st.secrets.get("CHAT_ID", "")
-            if tok and cid:
-                txt = f"🌾 ASSURANCE\n👤 ID: {uid}\n📈 Risque: {risque:.2f}%\n💰 Indemnite: {ind:.2f} DT"
-                try: requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": cid, "text": txt}, timeout=3)
-                except: pass
+                risque_ml = model
