@@ -113,7 +113,6 @@ def get_weather(region, mois, annee=2025):
         
         key = f"{annee}{mois:02d}"
         
-        # Lignes réécrites de manière condensée et ultra-sécurisée sur une seule ligne
         temp = float(p.get("T2M", {}).get(key, 25.0))
         pluie = float(p.get("PRECTOTCORR", {}).get(key, 20.0))
         humidite = float(p.get("RH2M", {}).get(key, 60.0))
@@ -128,4 +127,57 @@ def get_weather(region, mois, annee=2025):
 # 5. STRUCTURE DE L'INTERFACE UTILISATEUR
 # ==========================================
 st.title("🌾 Système Décisionnel d'Assurance Agricole Paramétrique")
-st.
+st.markdown("---")
+
+# Division de l'écran en deux grands blocs horizontaux
+col_formulaire, col_dashboard = st.columns([1, 1.3], gap="medium")
+
+# --- BLOC DE GAUCHE : SAISIE DES DONNÉES UTILISATEUR ---
+with col_formulaire:
+    st.subheader("📋 Paramètres du Contrat")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        user_id = st.text_input("🆔 ID Exploitant", placeholder="Ex: TUN-852")
+    with c2:
+        region = st.selectbox("📍 Région d'analyse", list(coords.keys()))
+        
+    c3, c4 = st.columns(2)
+    with c3:
+        culture = st.selectbox("🌱 Culture", ["Olives", "Céréales"])
+    with c4:
+        irrigation = st.radio("💧 Irrigation artificielle", ["Oui", "Non"], horizontal=True)
+
+    c5, c6, c7 = st.columns(3)
+    with c5:
+        mois = st.selectbox("📅 Mois", list(range(1, 13)), index=4)
+    with c6:
+        superficie = st.number_input("📏 Superficie (Ha)", min_value=1, value=15)
+    with c7:
+        production = st.number_input("🚜 Rendement attendu (T)", min_value=1, value=60)
+
+    # Calcul automatique de la saison
+    if mois in [12, 1, 2]: saison = "Hiver"
+    elif mois in [3, 4, 5]: saison = "Printemps"
+    elif mois in [6, 7, 8]: saison = "Été"
+    else: saison = "Automne"
+    
+    st.write(f"🍂 *Période rattachée : Période de l'{saison}*")
+    btn_analyser = st.button("🚀 EXÉCUTER L'ANALYSE DES SEUILS", use_container_width=True, type="primary")
+
+# --- BLOC DE DROITE : PANNEAU DES RÉSULTATS VISUELS & EXPLICATIONS ---
+with col_dashboard:
+    if not user_id:
+        st.warning("👈 Veuillez renseigner l'Identifiant Exploitant à gauche pour activer le Dashboard.")
+        st.stop()
+        
+    # Extraction de la météo réelle
+    weather = get_weather(region, mois)
+    if weather is None:
+        st.error("❌ Données climatiques de la NASA temporairement indisponibles.")
+        st.stop()
+        
+    temp, pluie, humidite, vent = weather
+    
+    # Création des onglets horizontaux pour éviter la descente infinie de la page
+    tab1, tab2, tab3 = st.tabs(
