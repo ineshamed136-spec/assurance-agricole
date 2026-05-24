@@ -67,14 +67,8 @@ with col2:
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         st.error(f"💰 Indemnité estimée : {ind:.2f} DT")
 
-        with st.expander("ℹ️ Comprendre les formules de calcul"):
-            st.markdown("""
-### 1. Calcul de la Prime (Coût de l'assurance)
-**Formule :** `(Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1)`
-- **Risque ML :** Probabilité de sinistre calculée par IA.
-- **Frais de gestion :** 12 DT par hectare.
-- **Valeur économique :** 1.1 DT par tonne produite.
-
-### 2. Calcul de l'Indemnité (Remboursement)
-**Formule :** `( (35 - Pluie) / 27 ) * Capital_Max`
-- **Seuil :** L'indemnité commence si la pluie tombe sous
+        # Remplacé par des commandes simples pour éviter les erreurs de syntaxe
+        with st.expander("ℹ️ Comprendre les formules"):
+            st.write("1. Prime = (Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1)")
+            st.write("2. Indemnité = ((35 - Pluie) / 27) * Capital_Max")
+            st.write("Ces formules utilisent les indices météo pour déclencher le remboursement automatiquement.")
