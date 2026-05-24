@@ -5,7 +5,7 @@ import requests
 
 st.set_page_config(page_title="Assurance Agricole", layout="wide")
 
-# Chargement du modèle (Statique)
+# 1. CHARGEMENT MODELE
 @st.cache_resource
 def load_model():
     try: return joblib.load("model.pkl"), True
@@ -13,7 +13,7 @@ def load_model():
 
 model_rf, model_charge = load_model()
 
-# Configuration Météo
+# 2. CONFIGURATION METEO
 coords = {"Tunis": (36.8, 10.18), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87), "Beja": (36.72, 9.18), "Sousse": (35.82, 10.6), "Monastir": (35.76, 10.81), "Kairouan": (35.67, 10.09), "Kebili": (33.7, 8.97), "Gabes": (33.88, 10.09)}
 
 @st.cache_data(ttl=3600)
@@ -25,7 +25,7 @@ def get_weather(reg, m):
     k = f"2025{m:02d}"
     return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
 
-# Interface
+# 3. INTERFACE
 st.title("🌾 Assurance Agricole")
 col1, col2 = st.columns([1, 2])
 
@@ -39,9 +39,6 @@ with col1:
 
 with col2:
     t, pl, hum, vent = get_weather(region, mois)
-    
-    # Affichage des données climatiques
-    st.subheader("Données Climatiques Actuelles")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Temp", f"{t:.1f}°C")
     m2.metric("Pluie", f"{pl:.0f}mm")
@@ -59,7 +56,6 @@ with col2:
                 risque = model_rf.predict_proba(X)[0][1] * 100
             except: pass
 
-        # CALCULS
         prod_totale = sup * prod
         prime = (risque * 4.2) + (sup * 12) + (prod_totale * 1.1)
         cap_max = (sup * 200) + (prod_totale * 25)
@@ -71,8 +67,14 @@ with col2:
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         st.error(f"💰 Indemnité estimée : {ind:.2f} DT")
 
-        # EXPLICATION DES FORMULES
         with st.expander("ℹ️ Comprendre les formules de calcul"):
             st.markdown("""
-            ### 1. Calcul de la Prime (Coût de l'assurance)
-            **Formule :** `(Risque *
+### 1. Calcul de la Prime (Coût de l'assurance)
+**Formule :** `(Risque * 4.2) + (Superficie * 12) + (Prod_Totale * 1.1)`
+- **Risque ML :** Probabilité de sinistre calculée par IA.
+- **Frais de gestion :** 12 DT par hectare.
+- **Valeur économique :** 1.1 DT par tonne produite.
+
+### 2. Calcul de l'Indemnité (Remboursement)
+**Formule :** `( (35 - Pluie) / 27 ) * Capital_Max`
+- **Seuil :** L'indemnité commence si la pluie tombe sous
