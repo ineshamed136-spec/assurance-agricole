@@ -9,7 +9,7 @@ import requests
 st.set_page_config(
     page_title="Assurance Agricole Intelligente",
     page_icon="🌾",
-    layout="wide"  # Maximise l'espace horizontal pour éviter le défilement vers le bas
+    layout="wide"
 )
 
 # Style CSS personnalisé pour embellir l'interface
@@ -90,3 +90,23 @@ coords = {
 # ==========================================
 @st.cache_data(ttl=3600)
 def get_weather(region, mois, annee=2025):
+    lat, lon = coords[region]
+    url = "https://power.larc.nasa.gov/api/temporal/monthly/point"
+    
+    params = {
+        "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
+        "community": "AG",
+        "longitude": lon, 
+        "latitude": lat,
+        "start": str(annee), 
+        "end": str(annee),
+        "format": "JSON"
+    }
+    
+    try:
+        r = requests.get(url, params=params, timeout=15)
+        if r.status_code != 200: 
+            return None
+            
+        data = r.json()  
+        p =
