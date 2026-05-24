@@ -23,6 +23,7 @@ coords = {
     "Kairouan": (35.67, 10.09), "Kebili": (33.70, 8.97),
     "Gabes": (33.88, 10.09)
 }
+
 @st.cache_data(ttl=3600)
 def get_weather(reg, m):
     lat, lon = coords[reg]
@@ -46,7 +47,8 @@ with col1:
     sup = st.number_input("Superficie (Ha)", value=15)
     prod = st.number_input("Rendement (T)", value=60)
     btn = st.button("🚀 ANALYSER")
-    with col2:
+
+with col2:
     w = get_weather(region, mois)
     t, pl, hum, vent = w[0], w[1], w[2], w[3]
     
@@ -67,7 +69,9 @@ with col1:
         
         st.metric("🔥 Risque Global", f"{risque:.1f} %")
         st.progress(int(min(100, risque)))
+        
         if pl < 35:
             st.error(f"💰 Indemnité : {((35-pl)/27)*5000:.0f} DT")
         else:
             st.success("💰 Aucune indemnité")
+            
