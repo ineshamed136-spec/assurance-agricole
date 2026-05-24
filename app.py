@@ -63,26 +63,4 @@ with col2:
                 X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
                 X["temp"], X["précipitations"], X["humidité"], X["vent"], X["mois"], X["annee"] = t, pl, hum, vent, mois, 2025
                 if f"region_{region}" in X.columns: X[f"region_{region}"] = 1
-                if f"saison_{saison}" in X.columns: X[f"saison_{saison}"] = 1
-                risque_ml = model_rf.predict_proba(X)[0][1] * 100
-            except: pass
-
-        r_regle = 10
-        explication_regle = "Score de base : 10%"
-        if pl < 15: 
-            r_regle += 35
-            explication_regle += " + 35% (Pluie < 15mm)"
-        if t > 38: 
-            r_regle += 25
-            explication_regle += " + 25% (Temp > 38°C)"
-        if irrigation == "Non": 
-            r_regle += 15
-            explication_regle += " + 15% (Pas d'irrigation)"
-        
-        risque = max(0, min(100, (0.7 * risque_ml) + (0.3 * r_regle)))
-        prime_pure = risque * 4.2
-        frais_chargement = (sup * 12) + (prod * 1.1)
-        prime = prime_pure + frais_chargement
-        
-        with t2:
-            st.markdown("###
+                if f"saison_{saison}" in X.columns: X
