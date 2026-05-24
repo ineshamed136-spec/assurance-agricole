@@ -14,7 +14,8 @@ st.set_page_config(
 @st.cache_resource
 def load_model():
     try:
-        m = joblib.load("model_rf.pkl")
+        # Ligne mise à jour avec le nouveau nom du fichier
+        m = joblib.load("model")
         return m, True
     except:
         return None, False
@@ -34,7 +35,7 @@ coords = {
 }
 
 # ==================================
-# 2. COLLECTE DES DONNEES
+# 2. COLLECTE DES DONNEES (NASA)
 # ==================================
 @st.cache_data(ttl=3600)
 def get_weather(reg, m):
@@ -44,7 +45,7 @@ def get_weather(reg, m):
         "/api/temporal/monthly/point"
     )
     p = {
-        "parameters": "T2M,PRECTOTCORR",
+        "parameters": "T2M,PRECTOTCORR,RH2M,WS2M",
         "community": "AG",
         "longitude": lon,
         "latitude": lat,
@@ -59,15 +60,17 @@ def get_weather(reg, m):
             timeout=8
         )
         if r.status_code != 200:
-            return [24.5, 12.0]
+            return [24.5, 12.0, 60.0, 4.0]
         res = r.json()
         d = res["properties"]["parameter"]
         k = f"2025{m:02d}"
         v_t = float(d["T2M"][k])
         v_p = float(d["PRECTOTCORR"][k])
-        return [v_t, v_p]
+        v_h = float(d["RH2M"][k])
+        v_w = float(d["WS2M"][k])
+        return [v_t, v_p, v_h, v_w]
     except:
-        return [24.5, 12.0]
+        return [24.5, 12.0, 60.0, 4.0]
 
 # ==================================
 # 3. INTERFACE UTILISATEUR
@@ -132,7 +135,7 @@ with col1:
 
 with col2:
     w = get_weather(region, mois)
-    t, pl = w[0], w[1]
+    t, pl, hum, vent = w[0], w[1], w[2], w[3]
 
     tabs = ["🌦️ Météo", "📉 Risque", "🛡️ Payout"]
     t1, t2, t3 = st.tabs(tabs)
@@ -140,10 +143,13 @@ with col2:
     with t1:
         st.write(f"**Région :** {region}")
         st.write(f"**Saison :** {saison}")
-        st.info(f"🌡️ {t:.1f}°C | 🌧️ {pl:.1f}mm")
+        st.info(f"🌡️ Température : {t:.1f}°C")
+        st.info(f"🌧️ Pluviométrie : {pl:.1f} mm")
+        st.info(f"💧 Humidité : {hum:.1f} %")
+        st.info(f"💨 Vitesse Vent : {vent:.1f} m/s")
 
     if btn:
-        # --- 1. MODELE ML ---
+        # --- MOTEUR 1 : MACHINE LEARNING ---
         risque_ml = 20.0
         if model_charge:
             try:
@@ -155,6 +161,8 @@ with col2:
                 )
                 X["temp"] = t
                 X["précipitations"] = pl
+                X["humidité"] = hum
+                X["vent"] = vent
                 X["mois"] = mois
                 X["annee"] = 2025
 
@@ -170,14 +178,12 @@ with col2:
                 risque_ml = p[0][1] * 100
             except:
                 calc = t * 2.2
-                risque_ml = max(10.0, calc)
-                risque_ml = min(90.0, risque_ml)
+                risque_ml = max(10.0, min(90.0, calc))
         else:
             calc = t * 2.2
-            risque_ml = max(10.0, calc)
-            risque_ml = min(90.0, risque_ml)
+            risque_ml = max(10.0, min(90.0, calc))
 
-        # --- 2. REGLES EXPERTS ---
+        # --- MOTEUR 2 : REGLES DE METIER ---
         r_regle = 10
         if pl < 35:
             r_regle += int((35 - pl) * 2.0)
@@ -186,24 +192,34 @@ with col2:
         if irrigation == "Non":
             r_regle += 15
 
-        # --- 3. CALCULS FINAUX ---
+        # --- FUSION DES DEUX MOTEURS (70% ML / 30% Métier) ---
         v1 = 0.7 * risque_ml
         v2 = 0.3 * r_regle
         risque = max(0, min(100, v1 + v2))
         
+        # Tarification Actuarielle
         p1 = risque * 4.2
         p2 = sup * 12
         p3 = prod * 1.1
         prime = p1 + p2 + p3
 
         with t2:
-            st.markdown("### Risque")
+            st.markdown("### Évaluation Hybride")
+            # Petit indicateur visuel pour savoir si le modèle est bien lu
+            if model_charge:
+                st.success("🤖 Modèle connecté avec succès")
+            else:
+                st.warning("⚠️ Fichier modèle introuvable, mode secours actif")
+                
+            st.write(f"📊 Risque ML pur : {risque_ml:.1f}%")
+            st.write(f"📜 Risque Métier pur : {r_regle:.1f}%")
+            st.divider()
             st.metric(
-                "🔥 Taux Global",
+                "🔥 Taux Global Fusionné",
                 f"{risque:.1f} %"
             )
             st.metric(
-                "💳 Prime Pure",
+                "💳 Prime Finale",
                 f"{prime:.1f} DT"
             )
             st.progress(int(risque))
