@@ -13,8 +13,8 @@ def load_model():
 
 model_rf, model_charge = load_model()
 
-# 2. CONFIGURATION RÉGIONALE (Coefficients actuariels dynamiques)
-# Tunisie : Plus le coefficient est haut, plus le risque financier est élevé
+# 2. CONFIGURATION RÉGIONALE
+# Ces paramètres assurent une tarification équitable et personnalisée par région
 geo_conf = {
     "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0},
     "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0},
@@ -36,7 +36,6 @@ coords = {
 @st.cache_data(ttl=3600)
 def get_weather(reg, m):
     lat, lon = coords[reg]
-    # Année 2026 pour données actuelles
     p = {"parameters": "T2M,PRECTOTCORR,RH2M,WS2M", "community": "AG", "longitude": lon, "latitude": lat, "start": "2026", "end": "2026", "format": "JSON"}
     try:
         r = requests.get("https://power.larc.nasa.gov/api/temporal/monthly/point", params=p, timeout=10)
@@ -60,8 +59,4 @@ with col1:
 
 with col2:
     t, pl, hum, vent = get_weather(region, mois)
-    st.subheader("📊 Données Climatiques (NASA Power 2026)")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Température", f"{t:.1f}°C")
-    m2.metric("Précipitations", f"{pl:.1f} mm")
-    m3.metric("Humidité
+    st.subheader("📊 Données Climatiques (NASA Power
