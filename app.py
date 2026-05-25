@@ -13,17 +13,17 @@ def load_model():
 
 model_rf, model_charge = load_model()
 
-# 2. CONFIGURATION RÉGIONALE
+# 2. CONFIGURATION RÉGIONALE (Moyenne sur 20 ans incluse)
 geo_conf = {
-    "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0},
-    "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0},
-    "Bizerte": {"facteur": 0.8, "coeff": 3.5, "seuil": 35.0},
-    "Beja": {"facteur": 0.75, "coeff": 3.0, "seuil": 40.0},
-    "Sousse": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
-    "Monastir": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
-    "Kairouan": {"facteur": 1.15, "coeff": 5.5, "seuil": 22.0},
-    "Kebili": {"facteur": 1.4, "coeff": 7.0, "seuil": 10.0},
-    "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0}
+    "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0, "moyenne_20ans": 45.5},
+    "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0, "moyenne_20ans": 42.0},
+    "Bizerte": {"facteur": 0.8, "coeff": 3.5, "seuil": 35.0, "moyenne_20ans": 55.2},
+    "Beja": {"facteur": 0.75, "coeff": 3.0, "seuil": 40.0, "moyenne_20ans": 60.8},
+    "Sousse": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0, "moyenne_20ans": 38.4},
+    "Monastir": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0, "moyenne_20ans": 37.9},
+    "Kairouan": {"facteur": 1.15, "coeff": 5.5, "seuil": 22.0, "moyenne_20ans": 25.1},
+    "Kebili": {"facteur": 1.4, "coeff": 7.0, "seuil": 10.0, "moyenne_20ans": 12.5},
+    "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0, "moyenne_20ans": 18.2}
 }
 
 # 3. GÉNÉRATEUR DE DONNÉES STABILISÉ
@@ -57,8 +57,8 @@ with col2:
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
-    m3.metric("Seuil Régional", f"{cfg['seuil']} mm")
-    m4.metric("Vent", f"{vent:.1f} m/s")
+    m3.metric("Seuil Sinistre", f"{cfg['seuil']} mm")
+    m4.metric("Moyenne 20 ans", f"{cfg['moyenne_20ans']} mm")
 
     if btn:
         risque_final = (25.0 * cfg["facteur"]) + (mois * 0.5)
@@ -90,13 +90,13 @@ with col2:
             Représente la valeur totale assurée : `(Sup * 200 DT/Ha) + (Prod * 25 DT/T)`.
             
             ### 💳 La Prime (Coût du risque)
-            La prime est calculée en combinant le risque climatique régional, les coûts administratifs fixes par hectare, et une part variable liée à la valeur de la production.
+            Calculée via : *Risque x Coeff + Frais fixes + Part variable*.
             
             ### 💧 Logique de Déclenchement (Trigger)
-            Le seuil défini pour **{region}** est de **{cfg['seuil']} mm**.
-            * **Sinistre Total :** Déclenché si la pluie est inférieure à {cfg['seuil']} mm.
-            * **Stress Hydrique (Franchise) :** Si la pluie est entre {cfg['seuil']} mm et {cfg['seuil'] + 10} mm, nous versons une indemnité forfaitaire (5% du Capital Max).
+            * **Référence historique :** Moyenne sur 20 ans pour **{region}** : **{cfg['moyenne_20ans']} mm**.
+            * **Seuil de déclenchement :** **{cfg['seuil']} mm**.
+            * **Sinistre Total :** Si pluie < {cfg['seuil']} mm.
+            * **Stress Hydrique :** Si pluie entre {cfg['seuil']} et {cfg['seuil'] + 10} mm (Indemnité : 5% du Capital Max).
             """)
             st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
-            st.latex(r"Indemnité_{Stress} = Capital_{Max} \times 0.05")
             st.latex(r"Indemnité_{Sinistre} = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{Max}")
