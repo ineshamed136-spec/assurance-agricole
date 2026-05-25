@@ -108,4 +108,14 @@ with col2:
         else:
             st.info("💰 Aide de soutien prévue : 50.00 DT")
 
-        with st.expander("ℹ️ Méthodologie
+        with st.expander("ℹ️ Méthodologie et Formules de Calcul"):
+            st.markdown("""
+            ### 1. Prime à payer
+            $$Prime = (Risque \\times 4.2) + (Superficie \\times 12) + (Prod_{Totale} \\times 1.1)$$
+
+            ### 2. Indemnité de sinistre
+            $$Indemnité = \\left( \\frac{Seuil - Pluviométrie}{Seuil} \\right) \\times Cap_{Max} \\times Facteur_{Irrigation}$$
+            
+            ### 3. Capital Maximum ($Cap_{Max}$)
+            $$Cap_{Max} = (Superficie \\times 200) + (Prod_{Totale} \\times 25)$$
+            """)
