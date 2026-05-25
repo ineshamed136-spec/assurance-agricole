@@ -13,9 +13,7 @@ def load_model():
 
 model_rf, model_charge = load_model()
 
-# 2. CONFIGURATION RÉGIONALE (Coefficients et Seuils personnalisés)
-# 'coeff' : multiplicateur de risque pour la prime
-# 'seuil' : limite de pluviométrie en dessous de laquelle l'indemnité se déclenche
+# 2. CONFIGURATION RÉGIONALE
 geo_conf = {
     "Tunis":    {"coeff": 4.0, "seuil": 30.0},
     "Nabeul":   {"coeff": 4.5, "seuil": 32.0},
@@ -28,11 +26,12 @@ geo_conf = {
     "Gabes":    {"coeff": 6.5, "seuil": 15.0}
 }
 
-# 3. GÉNÉRATEUR DE DONNÉES LOCALES
-def get_local_weather(reg):
-    # Données simulées cohérentes
-    temp = random.uniform(18.0, 38.0)
-    pluie = random.uniform(5.0, 50.0)
+# 3. GÉNÉRATEUR DE DONNÉES (Sensible au mois)
+def get_local_weather(reg, mois):
+    # La pluviométrie est plus faible en été (mois 6, 7, 8)
+    variation_saison = 0.5 if 6 <= mois <= 8 else 1.2
+    temp = random.uniform(15.0 + (mois*0.5), 35.0 + (mois*0.5))
+    pluie = random.uniform(5.0, 50.0) * variation_saison
     hum = random.uniform(30.0, 70.0)
     vent = random.uniform(2.0, 8.0)
     return temp, pluie, hum, vent
@@ -43,6 +42,7 @@ col1, col2 = st.columns([1, 2])
 
 with col1:
     region = st.selectbox("Région", list(geo_conf.keys()))
+    mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=4)
     culture = st.selectbox("Culture", ["Céréales", "Olives"])
     irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
     sup = st.number_input("Superficie (Ha)", value=15.0)
@@ -50,8 +50,8 @@ with col1:
     btn = st.button("🚀 LANCER L'ANALYSE", type="primary")
 
 with col2:
-    t, pl, hum, vent = get_local_weather(region)
-    st.subheader("📊 Indicateurs Agro-Climatiques")
+    t, pl, hum, vent = get_local_weather(region, mois)
+    st.subheader(f"📊 Indicateurs Agro-Climatiques (Mois : {mois})")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
@@ -60,37 +60,34 @@ with col2:
 
     if btn:
         cfg = geo_conf[region]
-        risque_final = 25.0 # Risque de base IA
-        if irrigation == "Non": risque_final += 15
+        # Le risque est désormais impacté par la saison (le mois)
+        risque_base = 25.0 + (mois * 0.5) 
+        if irrigation == "Non": risque_base += 15
         
         prod_totale = sup * prod
-        # Formule intégrant le coefficient régional unique
-        prime = (risque_final * cfg["coeff"]) + (sup * 12) + (prod_totale * 1.1)
+        prime = (risque_base * cfg["coeff"]) + (sup * 12) + (prod_totale * 1.1)
         cap_max = (sup * 200) + (prod_totale * 25)
 
         st.divider()
         c1, c2 = st.columns(2)
-        c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
+        c1.metric("🔥 Risque Global", f"{min(risque_base, 95.0):.1f} %")
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         
         st.divider()
         if pl < cfg["seuil"]:
             ind = ((cfg["seuil"] - pl) / cfg["seuil"]) * cap_max
-            st.error(f"💰 Indemnité de sinistre : {ind:.2f} DT (Déficit hydrique détecté)")
+            st.error(f"💰 Indemnité de sinistre : {ind:.2f} DT")
         else:
             st.success("✅ Conditions climatiques favorables.")
             st.info("💰 Aide de soutien : 50.00 DT")
 
-        # EXPLICATION DES FORMULES
         with st.expander("ℹ️ Méthodologie et Formules de Calcul"):
             st.markdown("""
             ### 1. Calcul de la Prime d'Assurance
-            $$Prime = (Risque \\times Coeff_{Régional}) + (Superficie \\times 12) + (Prod_{Totale} \\times 1.1)$$
-            * **Risque :** Estimation de la probabilité de perte basée sur l'historique météo.
-            * **Coeff Régional :** Pondération spécifique (ex: Kébili=7.0 vs Béja=3.0) reflétant la vulnérabilité intrinsèque de la zone.
+            $$Prime = (Risque_{IA} \\times Coeff_{Régional}) + (Superficie \\times 12) + (Prod_{Totale} \\times 1.1)$$
+            * Le $Risque_{IA}$ est ajusté dynamiquement selon le **mois** sélectionné pour refléter la saisonnalité climatique.
             
             ### 2. Calcul de l'Indemnité
-            $$Indemnité = \\left( \\frac{Seuil_{Régional} - Pluviométrie_{Réelle}}{Seuil_{Régional}} \\right) \\times Capital_{Max}$$
-            * **Seuil Régional :** La limite de pluie en dessous de laquelle le stress hydrique est jugé critique pour la culture.
-            * **Capital Max :** Somme assurée couvrant les intrants et la production espérée.
+            $$Indemnité = \\left( \\frac{Seuil_{Régional} - Pluviométrie_{Mois}}{Seuil_{Régional}} \\right) \\times Capital_{Max}$$
+            * Si la pluviométrie du mois est inférieure au seuil, le système déclenche une indemnisation proportionnelle au déficit.
             """)
