@@ -57,7 +57,7 @@ with col2:
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
-    m3.metric("Seuil Régional", f"{cfg['seuil']} mm") # Affichage du seuil
+    m3.metric("Seuil Régional", f"{cfg['seuil']} mm")
     m4.metric("Vent", f"{vent:.1f} m/s")
 
     if btn:
@@ -85,7 +85,7 @@ with col2:
             st.success("✅ Conditions climatiques optimales.")
 
         with st.expander("ℹ️ Méthodologie et Logique Paramétrique"):
-            st.markdown("""
+            st.markdown(f"""
             ### 🛡️ Le Capital Maximum
             Représente la valeur totale assurée : `(Sup * 200 DT/Ha) + (Prod * 25 DT/T)`.
             
@@ -93,8 +93,9 @@ with col2:
             La prime est calculée en combinant le risque climatique régional, les coûts administratifs fixes par hectare, et une part variable liée à la valeur de la production.
             
             ### 💧 Logique de Déclenchement (Trigger)
-            * **Sinistre Total :** Déclenché si la pluie est inférieure au `Seuil` régional.
-            * **Stress Hydrique (Franchise) :** Si la pluie est entre `Seuil` et `Seuil + 10mm`, nous versons une indemnité forfaitaire (5% du Capital Max) pour couvrir les coûts de survie.
+            Le seuil défini pour **{region}** est de **{cfg['seuil']} mm**.
+            * **Sinistre Total :** Déclenché si la pluie est inférieure à {cfg['seuil']} mm.
+            * **Stress Hydrique (Franchise) :** Si la pluie est entre {cfg['seuil']} mm et {cfg['seuil'] + 10} mm, nous versons une indemnité forfaitaire (5% du Capital Max).
             """)
             st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
             st.latex(r"Indemnité_{Stress} = Capital_{Max} \times 0.05")
