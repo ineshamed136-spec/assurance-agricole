@@ -21,7 +21,6 @@ seuils_regionaux = {
     "Kairouan": 22.0, "Kebili": 10.0, "Gabes": 15.0
 }
 
-# Coefficients de risque actuariel par région (Sensibilité au sinistre)
 coeff_actuariel_map = {
     "Tunis": 4.0, "Nabeul": 4.5, "Bizerte": 3.5, 
     "Beja": 3.0, "Sousse": 4.2, "Monastir": 4.2, 
@@ -40,10 +39,9 @@ def get_weather(reg, m):
     p = {"parameters": "T2M,PRECTOTCORR,RH2M,WS2M", "community": "AG", "longitude": lon, "latitude": lat, "start": "2026", "end": "2026", "format": "JSON"}
     try:
         r = requests.get("https://power.larc.nasa.gov/api/temporal/monthly/point", params=p, timeout=8)
-        d = r.json()["properties"]["parameter"]
-        k = f"2026{m:02d}"
-        return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
-    except: return [24.5, 12.0, 60.0, 4.0]
+        return r.json(), r.json()["properties"]["parameter"]
+    except: 
+        return {}, {"T2M": {"202605": 24.5}, "PRECTOTCORR": {"202605": 12.0}, "RH2M": {"202605": 60.0}, "WS2M": {"202605": 4.0}}
 
 # 3. INTERFACE UTILISATEUR
 st.title("🌾 Système d'Assurance Agricole Paramétrique")
@@ -59,7 +57,10 @@ with col1:
     btn = st.button("🚀 LANCER L'ANALYSE", type="primary")
 
 with col2:
-    t, pl, hum, vent = get_weather(region, mois)
+    json_data, data = get_weather(region, mois)
+    k = f"2026{mois:02d}"
+    t, pl, hum, vent = float(data["T2M"][k]), float(data["PRECTOTCORR"][k]), float(data["RH2M"][k]), float(data["WS2M"][k])
+    
     st.subheader("📊 Données Climatiques (NASA Power)")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
@@ -68,4 +69,53 @@ with col2:
     m4.metric("Vent", f"{vent:.1f} m/s")
 
     if btn:
-        st.subheader("🔍 Rapport
+        st.subheader("🔍 Rapport d'Analyse Agronomique")
+        
+        risque_base = 20.0
+        if model_charge:
+            try:
+                X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
+                mapping = {"temp": t, "précipitations": pl, "humidité": hum, "vent": vent, "mois": mois}
+                for col in X.columns:
+                    if col in mapping: X[col] = mapping[col]
+                risque_base = model_rf.predict_proba(X)[0][1] * 100
+            except: 
+                pass
+
+        risque_final = min(max(risque_base, 5.0), 95.0)
+        
+        # Diagnostic
+        seuil = seuils_regionaux.get(region, 30.0)
+        if pl < seuil:
+            deficit_pct = ((seuil - pl) / seuil) * 100
+            st.error(f"**Diagnostic :** Stress hydrique détecté (Déficit de {deficit_pct:.1f}%).")
+        else:
+            st.success("**Diagnostic :** Niveau hydrique optimal.")
+
+        # Calculs Financiers
+        prod_totale = sup * prod
+        cap_max = (sup * 200) + (prod_totale * 25)
+        coeff_act = coeff_actuariel_map.get(region, 4.2)
+        prime = (risque_final * coeff_act) + (sup * 12) + (prod_totale * 1.1)
+
+        st.divider()
+        st.subheader("💰 Impact Financier")
+        c1, c2 = st.columns(2)
+        c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
+        c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
+        
+        if pl < seuil:
+            facteur_irrigation = 0.5 if irrigation == "Oui" else 1.0
+            ind = ((seuil - pl) / seuil) * cap_max * facteur_irrigation
+            st.metric("💰 Indemnité de sinistre estimée", f"{ind:.2f} DT")
+        else:
+            st.info("💰 Aide de soutien prévue : 50.00 DT")
+
+        with st.expander("ℹ️ Méthodologie et Transparence"):
+            st.markdown("""
+            ### 1. Formules utilisées
+            $$Prime = (Risque \\times Coeff_{Actuariel}) + (Superficie \\times 12) + (Prod_{Totale} \\times 1.1)$$
+            $$Indemnité = \\left( \\frac{Seuil - Pluviométrie}{Seuil} \\right) \\times Cap_{Max} \\times Facteur_{Irrigation}$$
+            """)
+            st.write("### 2. Données brutes (Source NASA)")
+            st.json(json_data)
