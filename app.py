@@ -75,7 +75,7 @@ with col2:
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         
         st.divider()
-        # Logique paramétrique : Stress hydrique vs Sinistre total
+        # Logique paramétrique
         if pl < cfg["seuil"]:
             ind = ((cfg["seuil"] - pl) / cfg["seuil"]) * cap_max
             st.error(f"💰 Indemnité de sinistre : {ind:.2f} DT")
@@ -85,9 +85,16 @@ with col2:
         else:
             st.success("✅ Conditions climatiques optimales.")
 
-        with st.expander("ℹ️ Comprendre le Capital et les Formules"):
-            st.markdown("### 🛡️ Le Capital Maximum\nLe Capital Max est la valeur totale assurée, composée des coûts d'intrants (200 DT/Ha) et de la valeur de récolte espérée.")
-            st.latex(r"Capital_{Max} = (Sup \times 200) + (Prod_{Totale} \times 25)")
-            st.markdown("### 🧮 Calculs financiers")
-            st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
-            st.latex(r"Indemnité = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{Max}")
+        with st.expander("ℹ️ Méthodologie et Logique Paramétrique"):
+            st.markdown("""
+            ### 🛡️ Le Capital Maximum
+            Représente la valeur totale assurée : `(Sup * 200 DT/Ha) + (Prod * 25 DT/T)`.
+            
+            ### 💧 Logique de Déclenchement (Trigger)
+            * **Sinistre Total :** Déclenché si la pluie est inférieure au `Seuil` régional. L'indemnité est proportionnelle au déficit pluviométrique.
+            * **Stress Hydrique (Franchise) :** Si la pluie est légèrement au-dessus du seuil (`Seuil` à `Seuil + 10mm`), nous versons une **indemnité de franchise (5% du Capital Max)**. 
+            
+            Cette aide permet à l'agriculteur de supporter les coûts de survie de la culture sans attendre une perte totale.
+            """)
+            st.latex(r"Indemnité_{Stress} = Capital_{Max} \times 0.05")
+            st.latex(r"Indemnité_{Sinistre} = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{Max}")
