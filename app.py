@@ -103,7 +103,10 @@ with col2:
         
         if pl < seuil:
             deficit = (seuil - pl) / seuil
-            ind = deficit * cap_max
+            # Si irrigué, indemnisation réduite par 2 car l'agriculteur limite ses pertes
+            facteur_irrigation = 0.5 if irrigation == "Oui" else 1.0
+            ind = deficit * cap_max * facteur_irrigation
+            
             st.error(f"⚠️ Déficit hydrique détecté (Seuil {region} : {seuil}mm)")
             st.metric("💰 Indemnité de sinistre estimée", f"{ind:.2f} DT")
         else:
@@ -112,4 +115,5 @@ with col2:
 
         with st.expander("ℹ️ Méthodologie"):
             st.write(f"Le calcul est basé sur un seuil de précipitations régional de **{seuil} mm**.")
-            st.write
+            st.write("Si les précipitations sont inférieures à ce seuil, l'indemnisation est proportionnelle au déficit constaté.")
+            st.write("L'irrigation réduit l'indemnité finale car elle limite l'impact du déficit sur la culture.")
