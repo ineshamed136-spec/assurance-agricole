@@ -63,13 +63,12 @@ with col2:
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
-    m3.metric("Précipitations", f"{pl:.1f} mm")
+    m3.metric("Humidité", f"{hum:.1f}%")
     m4.metric("Vent", f"{vent:.1f} m/s")
 
     if btn:
         st.subheader("🔍 Rapport d'Analyse Agronomique")
         
-        # Calcul du risque
         risque_base = 20.0
         if model_charge:
             try:
@@ -84,7 +83,6 @@ with col2:
         if irrigation == "Non": risque_final += 15
         risque_final = min(max(risque_final, 5.0), 95.0)
         
-        # LOGIQUE D'ANALYSE DU DÉFICIT
         seuil = seuils_regionaux.get(region, 30.0)
         
         if pl < seuil:
@@ -93,7 +91,6 @@ with col2:
         else:
             st.success("**Diagnostic :** Niveau hydrique optimal.")
 
-        # Calcul financier
         prod_totale = sup * prod
         prime = (risque_final * 4.2) + (sup * 12) + (prod_totale * 1.1)
         cap_max = (sup * 200) + (prod_totale * 25)
@@ -111,5 +108,4 @@ with col2:
         else:
             st.info("💰 Aide de soutien prévue : 50.00 DT")
 
-        with st.expander("ℹ️ Méthodologie"):
-            st.write("L'analyse compare les données climatiques en temps réel aux seuils agronomiques régionaux.")
+        with st.expander("ℹ️ Méthodologie
