@@ -82,10 +82,9 @@ with col2:
             st.success("✅ Conditions favorables.")
             st.info("💰 Aide de soutien : 50.00 DT")
 
-        # EXPLICATION PÉDAGOGIQUE
-        with st.expander("ℹ️ Comprendre le Capital Maximum et les Formules"):
-            st.markdown("""
-            ### 🛡️ Qu'est-ce que le Capital Maximum ?
-            Le **Capital Max** est la valeur totale assurée. Elle est composée de :
-            1. **Intrants (200 DT/Ha) :** Coûts fixes (engrais, semences, labour).
-            2. **Valeur de récolte (25 DT/T
+        with st.expander("ℹ️ Comprendre le Capital et les Formules"):
+            st.markdown("### 🛡️ Le Capital Maximum\nLe Capital Max est la valeur totale assurée, composée des coûts d'intrants (200 DT/Ha) et de la valeur de récolte espérée.")
+            st.latex(r"Capital_{Max} = (Sup \times 200) + (Prod_{Totale} \times 25)")
+            st.markdown("### 🧮 Calculs financiers")
+            st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
+            st.latex(r"Indemnité = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{Max}")
