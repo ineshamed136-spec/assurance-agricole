@@ -9,8 +9,10 @@ st.set_page_config(page_title="Assurance Agricole", layout="wide")
 # 1. CHARGEMENT MODÈLE
 @st.cache_resource
 def load_model():
-    try: return joblib.load("model.pkl"), True
-    except: return None, False
+    try: 
+        return joblib.load("model.pkl"), True
+    except: 
+        return None, False
 
 model_rf, model_charge = load_model()
 
@@ -43,7 +45,8 @@ def get_weather(reg, m):
         d = r.json()["properties"]["parameter"]
         k = f"2026{m:02d}"
         return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
-    except: return [24.5, 12.0, 60.0, 4.0]
+    except: 
+        return [24.5, 12.0, 60.0, 4.0]
 
 # 3. INTERFACE UTILISATEUR
 st.title("🌾 Système d'Assurance Agricole Paramétrique")
@@ -53,7 +56,7 @@ with col1:
     region = st.selectbox("Région", list(coords.keys()))
     culture = st.selectbox("Culture", ["Céréales", "Olives"])
     irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
-    mois = st.selectbox("Mois", list(range(1, 13)), index=4)
+    mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=4)
     sup = st.number_input("Superficie (Ha)", value=15.0)
     prod = st.number_input("Rendement attendu (T/Ha)", value=4.0)
     btn = st.button("🚀 CALCULER L'INDEMNITÉ", type="primary")
@@ -72,4 +75,41 @@ with col2:
         risque_base = 20.0
         if model_charge:
             try:
-                X = pd.DataFrame(0, index=[0], columns=
+                X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
+                mapping = {"temp": t, "précipitations": pl, "humidité": hum, "vent": vent, "mois": mois}
+                for col in X.columns:
+                    if col in mapping:
+                        X[col] = mapping[col]
+                risque_base = model_rf.predict_proba(X)[0][1] * 100
+            except Exception as e:
+                st.warning(f"Erreur modèle : {e}")
+
+        risque_final = risque_base * geo_factors.get(region, 1.0)
+        if irrigation == "Non": risque_final += 15
+        risque_final = min(max(risque_final, 5.0), 95.0)
+        
+        prod_totale = sup * prod
+        prime = (risque_final * 4.2) + (sup * 12) + (prod_totale * 1.1)
+        cap_max = (sup * 200) + (prod_totale * 25)
+
+        st.divider()
+        c1, c2 = st.columns(2)
+        c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
+        c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
+        
+        # LOGIQUE D'INDEMNISATION DYNAMIQUE
+        st.divider()
+        seuil = seuils_regionaux.get(region, 30.0)
+        
+        if pl < seuil:
+            deficit = (seuil - pl) / seuil
+            ind = deficit * cap_max
+            st.error(f"⚠️ Déficit hydrique détecté (Seuil {region} : {seuil}mm)")
+            st.metric("💰 Indemnité de sinistre estimée", f"{ind:.2f} DT")
+        else:
+            st.success("✅ Conditions hydriques optimales.")
+            st.info("💰 Aide de soutien symbolique : 50.00 DT")
+
+        with st.expander("ℹ️ Méthodologie"):
+            st.write(f"Le calcul est basé sur un seuil de précipitations régional de **{seuil} mm**.")
+            st.write
