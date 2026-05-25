@@ -86,14 +86,6 @@ with col2:
         with st.expander("ℹ️ Comprendre le Capital Maximum et les Formules"):
             st.markdown("""
             ### 🛡️ Qu'est-ce que le Capital Maximum ?
-            Le **Capital Max** représente la valeur totale assurée de votre parcelle. Il se compose de deux parts :
-            1. **Coûts de production (Intrants) :** `Superficie * 200 DT` (semences, engrais, labour).
-            2. **Valeur de récolte espérée :** `Production Totale * 25 DT` (revenu potentiel).
-            
-            C'est le plafond de garantie que l'assureur s'engage à couvrir en cas de perte totale.
-            """)
-            st.latex(r"Capital_{Max} = (Sup \times 200) + (Prod_{Totale} \times 25)")
-            
-            st.markdown("### 🧮 Calculs financiers")
-            st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
-            st.
+            Le **Capital Max** est la valeur totale assurée. Elle est composée de :
+            1. **Intrants (200 DT/Ha) :** Coûts fixes (engrais, semences, labour).
+            2. **Valeur de récolte (25 DT/T
