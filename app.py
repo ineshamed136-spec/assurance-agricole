@@ -96,4 +96,4 @@ with col2:
             
             st.markdown("### 🧮 Calculs financiers")
             st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
-            st.latex(r"Indemnité = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{
+            st.
