@@ -59,4 +59,23 @@ with col1:
 
 with col2:
     t, pl, hum, vent = get_weather(region, mois)
-    st.subheader("📊 Données Climatiques (NASA Power
+    st.subheader("📊 Données Climatiques (NASA Power 2026)")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Température", f"{t:.1f}°C")
+    m2.metric("Précipitations", f"{pl:.1f} mm")
+    m3.metric("Humidité", f"{hum:.1f}%")
+    m4.metric("Vent", f"{vent:.1f} m/s")
+
+    if btn:
+        risque_base = 20.0
+        if model_charge:
+            try:
+                X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
+                mapping = {"temp": t, "précipitations": pl, "humidité": hum, "vent": vent, "mois": mois}
+                for col in X.columns:
+                    if col in mapping: X[col] = mapping[col]
+                risque_base = model_rf.predict_proba(X)[0][1] * 100
+            except: pass
+
+        cfg = geo_conf[region]
+        risque_final = min
