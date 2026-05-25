@@ -26,12 +26,12 @@ geo_conf = {
     "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0}
 }
 
-# 3. GÉNÉRATEUR DE DONNÉES LOCALES (Sans API)
-def get_local_weather(reg):
-    # Génère des valeurs réalistes basées sur la région
-    seuil = geo_conf[reg]["seuil"]
-    temp = random.uniform(15.0, 35.0)
-    pluie = random.uniform(5.0, 50.0)
+# 3. GÉNÉRATEUR DE DONNÉES LOCALES (Sensible au mois)
+def get_local_weather(reg, mois):
+    # La pluviométrie diminue en été (mois 6, 7, 8)
+    variation_saison = 0.5 if 6 <= mois <= 8 else 1.2
+    temp = random.uniform(15.0 + (mois * 0.5), 25.0 + (mois * 0.5))
+    pluie = random.uniform(5.0, 50.0) * variation_saison
     hum = random.uniform(40.0, 80.0)
     vent = random.uniform(2.0, 10.0)
     return temp, pluie, hum, vent
@@ -42,6 +42,7 @@ col1, col2 = st.columns([1, 2])
 
 with col1:
     region = st.selectbox("Région", list(geo_conf.keys()))
+    mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=4)
     culture = st.selectbox("Culture", ["Céréales", "Olives"])
     irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
     sup = st.number_input("Superficie (Ha)", value=15.0)
@@ -49,8 +50,8 @@ with col1:
     btn = st.button("🚀 LANCER L'ANALYSE", type="primary")
 
 with col2:
-    t, pl, hum, vent = get_local_weather(region)
-    st.subheader("📊 Données Climatiques Simulées")
+    t, pl, hum, vent = get_local_weather(region, mois)
+    st.subheader(f"📊 Données Climatiques Simulées (Mois {mois})")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
@@ -60,8 +61,8 @@ with col2:
     if btn:
         cfg = geo_conf[region]
         
-        # Calcul du risque
-        risque_final = 25.0 * cfg["facteur"]
+        # Calcul du risque (impacté par le mois et l'irrigation)
+        risque_final = (25.0 * cfg["facteur"]) + (mois * 0.5)
         if irrigation == "Non": risque_final += 15
         risque_final = min(max(risque_final, 5.0), 95.0)
         
