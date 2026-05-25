@@ -14,18 +14,17 @@ def load_model():
 
 model_rf, model_charge = load_model()
 
-# 2. CONFIGURATION GÉOGRAPHIQUE
+# 2. CONFIGURATION GÉOGRAPHIQUE ET SEUILS
 seuils_regionaux = {
     "Tunis": 30.0, "Nabeul": 32.0, "Bizerte": 35.0, 
     "Beja": 40.0, "Sousse": 28.0, "Monastir": 28.0, 
     "Kairouan": 22.0, "Kebili": 10.0, "Gabes": 15.0
 }
 
-# Coefficients de risque actuariel par région (Sensibilité au sinistre)
-coeff_actuariel_map = {
-    "Tunis": 4.0, "Nabeul": 4.5, "Bizerte": 3.5, 
-    "Beja": 3.0, "Sousse": 4.2, "Monastir": 4.2, 
-    "Kairouan": 5.5, "Kebili": 7.0, "Gabes": 6.5
+geo_factors = {
+    "Tunis": 0.9, "Nabeul": 0.85, "Bizerte": 0.8, 
+    "Beja": 0.75, "Sousse": 0.95, "Monastir": 0.95, 
+    "Kairouan": 1.15, "Kebili": 1.4, "Gabes": 1.3
 }
 
 coords = {
@@ -80,22 +79,21 @@ with col2:
                 risque_base = model_rf.predict_proba(X)[0][1] * 100
             except: pass
 
-        risque_final = min(max(risque_base, 5.0), 95.0)
+        risque_final = risque_base * geo_factors.get(region, 1.0)
+        if irrigation == "Non": risque_final += 15
+        risque_final = min(max(risque_final, 5.0), 95.0)
         
-        # Diagnostic
         seuil = seuils_regionaux.get(region, 30.0)
+        
         if pl < seuil:
             deficit_pct = ((seuil - pl) / seuil) * 100
             st.error(f"**Diagnostic :** Stress hydrique détecté (Déficit de {deficit_pct:.1f}%).")
         else:
             st.success("**Diagnostic :** Niveau hydrique optimal.")
 
-        # Calculs Financiers
         prod_totale = sup * prod
+        prime = (risque_final * 4.2) + (sup * 12) + (prod_totale * 1.1)
         cap_max = (sup * 200) + (prod_totale * 25)
-        coeff_act = coeff_actuariel_map.get(region, 4.2)
-        
-        prime = (risque_final * coeff_act) + (sup * 12) + (prod_totale * 1.1)
 
         st.divider()
         st.subheader("💰 Impact Financier")
@@ -110,11 +108,10 @@ with col2:
         else:
             st.info("💰 Aide de soutien prévue : 50.00 DT")
 
-        with st.expander("ℹ️ Méthodologie et Formules"):
+        with st.expander("ℹ️ Méthodologie et Formules de Calcul"):
             st.markdown("""
             ### 1. Prime à payer
-            $$Prime = (Risque \\times Coeff_{Actuariel}) + (Superficie \\times 12) + (Prod_{Totale} \\times 1.1)$$
-            *Le $Coeff_{Actuariel}$ est ajusté selon la vulnérabilité climatique de la région.*
+            $$Prime = (Risque \\times 4.2) + (Superficie \\times 12) + (Prod_{Totale} \\times 1.1)$$
 
             ### 2. Indemnité de sinistre
             $$Indemnité = \\left( \\frac{Seuil - Pluviométrie}{Seuil} \\right) \\times Cap_{Max} \\times Facteur_{Irrigation}$$
@@ -122,4 +119,3 @@ with col2:
             ### 3. Capital Maximum ($Cap_{Max}$)
             $$Cap_{Max} = (Superficie \\times 200) + (Prod_{Totale} \\times 25)$$
             """)
-            st.write("Le système utilise les données NASA Power pour une objectivité totale dans l'évaluation des risques.")
