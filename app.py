@@ -75,12 +75,15 @@ with col2:
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         
         st.divider()
+        # Logique paramétrique : Stress hydrique vs Sinistre total
         if pl < cfg["seuil"]:
             ind = ((cfg["seuil"] - pl) / cfg["seuil"]) * cap_max
             st.error(f"💰 Indemnité de sinistre : {ind:.2f} DT")
+        elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
+            ind_partielle = cap_max * 0.05 
+            st.warning(f"⚠️ Stress hydrique détecté : Indemnité de franchise : {ind_partielle:.2f} DT")
         else:
-            st.success("✅ Conditions favorables.")
-            st.info("💰 Aide de soutien : 50.00 DT")
+            st.success("✅ Conditions climatiques optimales.")
 
         with st.expander("ℹ️ Comprendre le Capital et les Formules"):
             st.markdown("### 🛡️ Le Capital Maximum\nLe Capital Max est la valeur totale assurée, composée des coûts d'intrants (200 DT/Ha) et de la valeur de récolte espérée.")
