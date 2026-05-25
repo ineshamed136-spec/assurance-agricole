@@ -26,18 +26,23 @@ geo_conf = {
     "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0}
 }
 
-# 3. GÉNÉRATEUR DE DONNÉES LOCALES (Sensible au mois)
+# 3. GÉNÉRATEUR DE DONNÉES STABILISÉ
 def get_local_weather(reg, mois):
-    # La pluviométrie diminue en été (mois 6, 7, 8)
+    # Fixe les données pour chaque couple (région, mois)
+    random.seed(reg + str(mois))
+    
     variation_saison = 0.5 if 6 <= mois <= 8 else 1.2
     temp = random.uniform(15.0 + (mois * 0.5), 25.0 + (mois * 0.5))
     pluie = random.uniform(5.0, 50.0) * variation_saison
     hum = random.uniform(40.0, 80.0)
     vent = random.uniform(2.0, 10.0)
+    
+    # Réinitialisation pour ne pas affecter le reste du code
+    random.seed(None)
     return temp, pluie, hum, vent
 
 # 4. INTERFACE
-st.title("🌾 Système d'Assurance Agricole (Mode Local)")
+st.title("🌾 Système d'Assurance Agricole (Mode Local Stable)")
 col1, col2 = st.columns([1, 2])
 
 with col1:
@@ -51,7 +56,7 @@ with col1:
 
 with col2:
     t, pl, hum, vent = get_local_weather(region, mois)
-    st.subheader(f"📊 Données Climatiques Simulées (Mois {mois})")
+    st.subheader(f"📊 Données Climatiques (Stables pour {region} - Mois {mois})")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
@@ -61,7 +66,7 @@ with col2:
     if btn:
         cfg = geo_conf[region]
         
-        # Calcul du risque (impacté par le mois et l'irrigation)
+        # Calcul du risque
         risque_final = (25.0 * cfg["facteur"]) + (mois * 0.5)
         if irrigation == "Non": risque_final += 15
         risque_final = min(max(risque_final, 5.0), 95.0)
@@ -77,8 +82,4 @@ with col2:
         
         st.divider()
         if pl < cfg["seuil"]:
-            ind = ((cfg["seuil"] - pl) / cfg["seuil"]) * cap_max
-            st.error(f"💰 Indemnité de sinistre : {ind:.2f} DT")
-        else:
-            st.success("✅ Conditions favorables.")
-            st.info("💰 Aide de soutien : 50.00 DT")
+            ind = ((cfg["seuil"] - pl) / cfg["seuil"]) * cap
