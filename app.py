@@ -14,17 +14,18 @@ def load_model():
 
 model_rf, model_charge = load_model()
 
-# 2. CONFIGURATION GÉOGRAPHIQUE ET SEUILS
+# 2. CONFIGURATION GÉOGRAPHIQUE
 seuils_regionaux = {
     "Tunis": 30.0, "Nabeul": 32.0, "Bizerte": 35.0, 
     "Beja": 40.0, "Sousse": 28.0, "Monastir": 28.0, 
     "Kairouan": 22.0, "Kebili": 10.0, "Gabes": 15.0
 }
 
-geo_factors = {
-    "Tunis": 0.9, "Nabeul": 0.85, "Bizerte": 0.8, 
-    "Beja": 0.75, "Sousse": 0.95, "Monastir": 0.95, 
-    "Kairouan": 1.15, "Kebili": 1.4, "Gabes": 1.3
+# Coefficients de risque actuariel par région (Sensibilité au sinistre)
+coeff_actuariel_map = {
+    "Tunis": 4.0, "Nabeul": 4.5, "Bizerte": 3.5, 
+    "Beja": 3.0, "Sousse": 4.2, "Monastir": 4.2, 
+    "Kairouan": 5.5, "Kebili": 7.0, "Gabes": 6.5
 }
 
 coords = {
@@ -67,55 +68,4 @@ with col2:
     m4.metric("Vent", f"{vent:.1f} m/s")
 
     if btn:
-        st.subheader("🔍 Rapport d'Analyse Agronomique")
-        
-        risque_base = 20.0
-        if model_charge:
-            try:
-                X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
-                mapping = {"temp": t, "précipitations": pl, "humidité": hum, "vent": vent, "mois": mois}
-                for col in X.columns:
-                    if col in mapping: X[col] = mapping[col]
-                risque_base = model_rf.predict_proba(X)[0][1] * 100
-            except: pass
-
-        risque_final = risque_base * geo_factors.get(region, 1.0)
-        if irrigation == "Non": risque_final += 15
-        risque_final = min(max(risque_final, 5.0), 95.0)
-        
-        seuil = seuils_regionaux.get(region, 30.0)
-        
-        if pl < seuil:
-            deficit_pct = ((seuil - pl) / seuil) * 100
-            st.error(f"**Diagnostic :** Stress hydrique détecté (Déficit de {deficit_pct:.1f}%).")
-        else:
-            st.success("**Diagnostic :** Niveau hydrique optimal.")
-
-        prod_totale = sup * prod
-        prime = (risque_final * 4.2) + (sup * 12) + (prod_totale * 1.1)
-        cap_max = (sup * 200) + (prod_totale * 25)
-
-        st.divider()
-        st.subheader("💰 Impact Financier")
-        c1, c2 = st.columns(2)
-        c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
-        c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
-        
-        if pl < seuil:
-            facteur_irrigation = 0.5 if irrigation == "Oui" else 1.0
-            ind = ((seuil - pl) / seuil) * cap_max * facteur_irrigation
-            st.metric("💰 Indemnité de sinistre estimée", f"{ind:.2f} DT")
-        else:
-            st.info("💰 Aide de soutien prévue : 50.00 DT")
-
-        with st.expander("ℹ️ Méthodologie et Formules de Calcul"):
-            st.markdown("""
-            ### 1. Prime à payer
-            $$Prime = (Risque \\times 4.2) + (Superficie \\times 12) + (Prod_{Totale} \\times 1.1)$$
-
-            ### 2. Indemnité de sinistre
-            $$Indemnité = \\left( \\frac{Seuil - Pluviométrie}{Seuil} \\right) \\times Cap_{Max} \\times Facteur_{Irrigation}$$
-            
-            ### 3. Capital Maximum ($Cap_{Max}$)
-            $$Cap_{Max} = (Superficie \\times 200) + (Prod_{Totale} \\times 25)$$
-            """)
+        st.subheader("🔍 Rapport
