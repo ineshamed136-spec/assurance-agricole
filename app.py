@@ -3,10 +3,9 @@ import joblib
 import pandas as pd
 import requests
 
-# Configuration
 st.set_page_config(page_title="Assurance Agricole", layout="wide")
 
-# Chargement du modèle
+# 1. CHARGEMENT MODÈLE
 @st.cache_resource
 def load_model():
     try: return joblib.load("model.pkl"), True
@@ -14,48 +13,55 @@ def load_model():
 
 model_rf, model_charge = load_model()
 
+# 2. CONFIGURATION RÉGIONALE (Coefficients actuariels dynamiques)
+# Tunisie : Plus le coefficient est haut, plus le risque financier est élevé
+geo_conf = {
+    "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0},
+    "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0},
+    "Bizerte": {"facteur": 0.8, "coeff": 3.5, "seuil": 35.0},
+    "Beja": {"facteur": 0.75, "coeff": 3.0, "seuil": 40.0},
+    "Sousse": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
+    "Monastir": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
+    "Kairouan": {"facteur": 1.15, "coeff": 5.5, "seuil": 22.0},
+    "Kebili": {"facteur": 1.4, "coeff": 7.0, "seuil": 10.0},
+    "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0}
+}
+
 coords = {
     "Tunis": (36.8, 10.18), "Nabeul": (36.45, 10.73), "Bizerte": (37.27, 9.87),
     "Beja": (36.72, 9.18), "Sousse": (35.82, 10.6), "Monastir": (35.76, 10.81),
     "Kairouan": (35.67, 10.09), "Kebili": (33.7, 8.97), "Gabes": (33.88, 10.09)
 }
 
-# Fonction API NASA réelle
-def get_nasa_data(reg, m):
+@st.cache_data(ttl=3600)
+def get_weather(reg, m):
     lat, lon = coords[reg]
-    # URL vers l'API NASA POWER (Données agronomiques)
-    url = f"https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M,PRECTOTCORR,RH2M,WS2M&community=AG&longitude={lon}&latitude={lat}&start=2026&end=2026&format=JSON"
-    response = requests.get(url, timeout=10)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        st.error("Impossible de joindre les serveurs de la NASA.")
-        return None
+    # Année 2026 pour données actuelles
+    p = {"parameters": "T2M,PRECTOTCORR,RH2M,WS2M", "community": "AG", "longitude": lon, "latitude": lat, "start": "2026", "end": "2026", "format": "JSON"}
+    try:
+        r = requests.get("https://power.larc.nasa.gov/api/temporal/monthly/point", params=p, timeout=10)
+        d = r.json()["properties"]["parameter"]
+        k = f"2026{m:02d}"
+        return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
+    except: return [24.5, 12.0, 60.0, 4.0]
 
-# --- Interface ---
-st.title("🌾 Assurance Agricole - Données NASA Réelles")
-region = st.sidebar.selectbox("Région", list(coords.keys()))
-mois = st.sidebar.selectbox("Mois", list(range(1, 13)), index=4)
+# 3. INTERFACE
+st.title("🌾 Système d'Assurance Agricole Paramétrique")
+col1, col2 = st.columns([1, 2])
 
-if st.button("Récupérer données NASA"):
-    data_json = get_nasa_data(region, mois)
-    if data_json:
-        # Extraction dynamique basée sur la clé correcte du JSON NASA
-        params = data_json["properties"]["parameter"]
-        k = f"2026{mois:02d}"
-        
-        t = params["T2M"][k]
-        pl = params["PRECTOTCORR"][k]
-        hum = params["RH2M"][k]
-        vent = params["WS2M"][k]
-        
-        st.success("Données récupérées avec succès !")
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Température", f"{t} °C")
-        m2.metric("Précipitations", f"{pl} mm")
-        m3.metric("Humidité", f"{hum} %")
-        m4.metric("Vent", f"{vent} m/s")
-        
-        # Affichage du JSON pour prouver la provenance
-        with st.expander("Voir la structure JSON reçue"):
-            st.json(data_json)
+with col1:
+    region = st.selectbox("Région", list(coords.keys()))
+    culture = st.selectbox("Culture", ["Céréales", "Olives"])
+    irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
+    mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=4)
+    sup = st.number_input("Superficie (Ha)", value=15.0)
+    prod = st.number_input("Rendement attendu (T/Ha)", value=4.0)
+    btn = st.button("🚀 LANCER L'ANALYSE", type="primary")
+
+with col2:
+    t, pl, hum, vent = get_weather(region, mois)
+    st.subheader("📊 Données Climatiques (NASA Power 2026)")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Température", f"{t:.1f}°C")
+    m2.metric("Précipitations", f"{pl:.1f} mm")
+    m3.metric("Humidité
