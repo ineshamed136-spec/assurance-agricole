@@ -9,15 +9,12 @@ st.set_page_config(page_title="Assurance Agricole", layout="wide")
 # 1. CHARGEMENT MODÈLE
 @st.cache_resource
 def load_model():
-    try: 
-        return joblib.load("model.pkl"), True
-    except: 
-        return None, False
+    try: return joblib.load("model.pkl"), True
+    except: return None, False
 
 model_rf, model_charge = load_model()
 
 # 2. CONFIGURATION GÉOGRAPHIQUE ET SEUILS
-# Seuils de précipitations (mm) en dessous desquels le déficit est critique
 seuils_regionaux = {
     "Tunis": 30.0, "Nabeul": 32.0, "Bizerte": 35.0, 
     "Beja": 40.0, "Sousse": 28.0, "Monastir": 28.0, 
@@ -45,8 +42,7 @@ def get_weather(reg, m):
         d = r.json()["properties"]["parameter"]
         k = f"2026{m:02d}"
         return [float(d["T2M"][k]), float(d["PRECTOTCORR"][k]), float(d["RH2M"][k]), float(d["WS2M"][k])]
-    except: 
-        return [24.5, 12.0, 60.0, 4.0]
+    except: return [24.5, 12.0, 60.0, 4.0]
 
 # 3. INTERFACE UTILISATEUR
 st.title("🌾 Système d'Assurance Agricole Paramétrique")
@@ -59,7 +55,7 @@ with col1:
     mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=4)
     sup = st.number_input("Superficie (Ha)", value=15.0)
     prod = st.number_input("Rendement attendu (T/Ha)", value=4.0)
-    btn = st.button("🚀 CALCULER L'INDEMNITÉ", type="primary")
+    btn = st.button("🚀 LANCER L'ANALYSE", type="primary")
 
 with col2:
     t, pl, hum, vent = get_weather(region, mois)
@@ -67,10 +63,12 @@ with col2:
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
-    m3.metric("Humidité", f"{hum:.1f}%")
+    m3.metric("Précipitations", f"{pl:.1f} mm")
     m4.metric("Vent", f"{vent:.1f} m/s")
 
     if btn:
+        st.subheader("🔍 Rapport d'Analyse Agronomique")
+        
         # Calcul du risque
         risque_base = 20.0
         if model_charge:
@@ -78,42 +76,40 @@ with col2:
                 X = pd.DataFrame(0, index=[0], columns=model_rf.feature_names_in_)
                 mapping = {"temp": t, "précipitations": pl, "humidité": hum, "vent": vent, "mois": mois}
                 for col in X.columns:
-                    if col in mapping:
-                        X[col] = mapping[col]
+                    if col in mapping: X[col] = mapping[col]
                 risque_base = model_rf.predict_proba(X)[0][1] * 100
-            except Exception as e:
-                st.warning(f"Erreur modèle : {e}")
+            except: pass
 
         risque_final = risque_base * geo_factors.get(region, 1.0)
         if irrigation == "Non": risque_final += 15
         risque_final = min(max(risque_final, 5.0), 95.0)
         
+        # LOGIQUE D'ANALYSE DU DÉFICIT
+        seuil = seuils_regionaux.get(region, 30.0)
+        
+        if pl < seuil:
+            deficit_pct = ((seuil - pl) / seuil) * 100
+            st.error(f"**Diagnostic :** Stress hydrique détecté (Déficit de {deficit_pct:.1f}%).")
+        else:
+            st.success("**Diagnostic :** Niveau hydrique optimal.")
+
+        # Calcul financier
         prod_totale = sup * prod
         prime = (risque_final * 4.2) + (sup * 12) + (prod_totale * 1.1)
         cap_max = (sup * 200) + (prod_totale * 25)
 
         st.divider()
+        st.subheader("💰 Impact Financier")
         c1, c2 = st.columns(2)
         c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         
-        # LOGIQUE D'INDEMNISATION DYNAMIQUE
-        st.divider()
-        seuil = seuils_regionaux.get(region, 30.0)
-        
         if pl < seuil:
-            deficit = (seuil - pl) / seuil
-            # Si irrigué, indemnisation réduite par 2 car l'agriculteur limite ses pertes
             facteur_irrigation = 0.5 if irrigation == "Oui" else 1.0
-            ind = deficit * cap_max * facteur_irrigation
-            
-            st.error(f"⚠️ Déficit hydrique détecté (Seuil {region} : {seuil}mm)")
+            ind = ((seuil - pl) / seuil) * cap_max * facteur_irrigation
             st.metric("💰 Indemnité de sinistre estimée", f"{ind:.2f} DT")
         else:
-            st.success("✅ Conditions hydriques optimales.")
-            st.info("💰 Aide de soutien symbolique : 50.00 DT")
+            st.info("💰 Aide de soutien prévue : 50.00 DT")
 
         with st.expander("ℹ️ Méthodologie"):
-            st.write(f"Le calcul est basé sur un seuil de précipitations régional de **{seuil} mm**.")
-            st.write("Si les précipitations sont inférieures à ce seuil, l'indemnisation est proportionnelle au déficit constaté.")
-            st.write("L'irrigation réduit l'indemnité finale car elle limite l'impact du déficit sur la culture.")
+            st.write("L'analyse compare les données climatiques en temps réel aux seuils agronomiques régionaux.")
