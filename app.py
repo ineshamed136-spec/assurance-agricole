@@ -52,15 +52,15 @@ with col1:
 
 with col2:
     t, pl, hum, vent = get_local_weather(region, mois)
+    cfg = geo_conf[region]
     st.subheader("📊 Données Climatiques")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
-    m3.metric("Humidité", f"{hum:.1f}%")
+    m3.metric("Seuil Régional", f"{cfg['seuil']} mm") # Affichage du seuil
     m4.metric("Vent", f"{vent:.1f} m/s")
 
     if btn:
-        cfg = geo_conf[region]
         risque_final = (25.0 * cfg["facteur"]) + (mois * 0.5)
         if irrigation == "Non": risque_final += 15
         risque_final = min(max(risque_final, 5.0), 95.0)
@@ -75,13 +75,12 @@ with col2:
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         
         st.divider()
-        # Logique paramétrique
         if pl < cfg["seuil"]:
             ind = ((cfg["seuil"] - pl) / cfg["seuil"]) * cap_max
             st.error(f"💰 Indemnité de sinistre : {ind:.2f} DT")
         elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
             ind_partielle = cap_max * 0.05 
-            st.warning(f"⚠️ Stress hydrique détecté : Indemnité de franchise : {ind_partielle:.2f} DT")
+            st.warning(f"⚠️ Stress hydrique : Indemnité de franchise : {ind_partielle:.2f} DT")
         else:
             st.success("✅ Conditions climatiques optimales.")
 
@@ -90,11 +89,13 @@ with col2:
             ### 🛡️ Le Capital Maximum
             Représente la valeur totale assurée : `(Sup * 200 DT/Ha) + (Prod * 25 DT/T)`.
             
-            ### 💧 Logique de Déclenchement (Trigger)
-            * **Sinistre Total :** Déclenché si la pluie est inférieure au `Seuil` régional. L'indemnité est proportionnelle au déficit pluviométrique.
-            * **Stress Hydrique (Franchise) :** Si la pluie est légèrement au-dessus du seuil (`Seuil` à `Seuil + 10mm`), nous versons une **indemnité de franchise (5% du Capital Max)**. 
+            ### 💳 La Prime (Coût du risque)
+            La prime est calculée en combinant le risque climatique régional, les coûts administratifs fixes par hectare, et une part variable liée à la valeur de la production.
             
-            Cette aide permet à l'agriculteur de supporter les coûts de survie de la culture sans attendre une perte totale.
+            ### 💧 Logique de Déclenchement (Trigger)
+            * **Sinistre Total :** Déclenché si la pluie est inférieure au `Seuil` régional.
+            * **Stress Hydrique (Franchise) :** Si la pluie est entre `Seuil` et `Seuil + 10mm`, nous versons une indemnité forfaitaire (5% du Capital Max) pour couvrir les coûts de survie.
             """)
+            st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
             st.latex(r"Indemnité_{Stress} = Capital_{Max} \times 0.05")
             st.latex(r"Indemnité_{Sinistre} = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{Max}")
