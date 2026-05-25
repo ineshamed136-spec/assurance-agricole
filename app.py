@@ -82,9 +82,18 @@ with col2:
             st.success("✅ Conditions favorables.")
             st.info("💰 Aide de soutien : 50.00 DT")
 
-        # EXPLICATION FORMULES
-        with st.expander("ℹ️ Méthodologie et Formules"):
-            st.markdown("### Calcul de la Prime")
+        # EXPLICATION PÉDAGOGIQUE
+        with st.expander("ℹ️ Comprendre le Capital Maximum et les Formules"):
+            st.markdown("""
+            ### 🛡️ Qu'est-ce que le Capital Maximum ?
+            Le **Capital Max** représente la valeur totale assurée de votre parcelle. Il se compose de deux parts :
+            1. **Coûts de production (Intrants) :** `Superficie * 200 DT` (semences, engrais, labour).
+            2. **Valeur de récolte espérée :** `Production Totale * 25 DT` (revenu potentiel).
+            
+            C'est le plafond de garantie que l'assureur s'engage à couvrir en cas de perte totale.
+            """)
+            st.latex(r"Capital_{Max} = (Sup \times 200) + (Prod_{Totale} \times 25)")
+            
+            st.markdown("### 🧮 Calculs financiers")
             st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
-            st.markdown("### Calcul de l'Indemnité")
-            st.latex(r"Indemnité = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{Max}")
+            st.latex(r"Indemnité = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{
