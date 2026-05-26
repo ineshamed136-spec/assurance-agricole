@@ -164,9 +164,6 @@ with col2:
 
     cfg = geo_conf[region]
 
-    # =========================
-    # VALEUR CULTURE
-    # =========================
     valeur_ha = 180 if culture == "Céréales" else 300
 
     # =========================
@@ -194,7 +191,6 @@ with col2:
             + (12 if irrigation == "Non" else 0)
         )
 
-        # augmentation si pluie faible
         if pl < cfg["historique"]:
             risque += 10
 
@@ -241,7 +237,7 @@ with col2:
         )
 
         # =========================
-        # INDEMNITÉ PRINCIPALE
+        # INDEMNITÉ
         # =========================
         indemn = (
             capital
@@ -252,9 +248,6 @@ with col2:
         # =========================
         # MICRO-INDEMNITÉ
         # =========================
-        # cohérence :
-        # risque élevé => compensation minimale
-
         if indemn == 0 and risque >= 35:
 
             indemn = (
@@ -296,13 +289,6 @@ with col2:
                 f"💰 Indemnité estimée : {indemn:.2f} DT"
             )
 
-            if pl >= seuil:
-
-                st.info(
-                    "📌 Risque agricole détecté : "
-                    "une compensation partielle est appliquée."
-                )
-
         else:
 
             st.success(
@@ -320,10 +306,6 @@ with col2:
 - Historique régional : {historique} mm
 - Valeur par hectare : {valeur_ha} DT
 - Capital assuré : {capital:.2f} DT
-
-👉 L’indemnité dépend du déficit climatique,
-du niveau de risque agricole
-et des caractéristiques du contrat.
 """)
 
         # =========================
@@ -356,7 +338,7 @@ Capital × Indice climatique × (0.4 + 0.6 × Risque)
 
 ### 📌 Compensation partielle
 
-Si le risque agricole reste élevé,
-une micro-indemnité minimale peut être appliquée
-même sans sécheresse sévère.
+Une compensation minimale peut être appliquée
+même en absence de sécheresse sévère
+si le risque agricole reste élevé.
 """)
