@@ -222,9 +222,6 @@ Prime = (β × Risque) + (Superficie × 12) + (Production × 1.1)
 
 ### 💰 Indemnité
 Indemnité = Capital × Déficit climatique × (1 + α × Risque)
-
-### 🌍 Source des données
-NASA POWER : https://power.larc.nasa.gov/
 """)
 
             st.latex(
