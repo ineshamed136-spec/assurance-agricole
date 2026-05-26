@@ -34,6 +34,9 @@ regions = {
     "Médenine": (33.3547, 10.5055)
 }
 
+# =========================
+# CONFIGURATION
+# =========================
 geo_conf = {
     "Tunis": {"facteur": 0.9, "seuil": 30.0, "historique": 45.5},
     "Nabeul": {"facteur": 0.85, "seuil": 32.0, "historique": 42.0},
@@ -47,7 +50,7 @@ geo_conf = {
 }
 
 # =========================
-# NASA
+# NASA API
 # =========================
 @st.cache_data(show_spinner=False)
 def get_nasa_weather(region, mois):
@@ -79,7 +82,7 @@ def get_nasa_weather(region, mois):
     )
 
 # =========================
-# UI
+# INTERFACE
 # =========================
 st.title("🌾 Assurance Agricole Paramétrique")
 
@@ -106,7 +109,7 @@ with col2:
 
     st.subheader("📊 Données climatiques")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Temp", f"{t:.1f} °C")
+    c1.metric("Température", f"{t:.1f} °C")
     c2.metric("Pluie", f"{pl:.1f} mm")
     c3.metric("Vent", f"{vent:.1f}")
     c4.metric("Humidité", f"{hum:.1f}%")
@@ -114,7 +117,7 @@ with col2:
     if btn:
 
         # =========================
-        # RISQUE
+        # RISQUE (probabilité)
         # =========================
         risque = min(max((25 * cfg["facteur"]) + (15 if irrigation == "Non" else 0), 5), 95)
         risque_norm = risque / 100
@@ -142,17 +145,14 @@ with col2:
         indice_climatique = 0.7 * deficit_seuil + 0.3 * deficit_hist
 
         # =========================
-        # SINISTRE LOGIQUE
+        # SINISTRE (CORRIGÉ)
         # =========================
-        sinistre = (indice_climatique > 0.15) or (risque_norm > 0.6 and indice_climatique > 0.05)
+        sinistre = indice_climatique > 0.10   # seuil réaliste
 
         # =========================
-        # INDEMNITÉ (CORRIGÉE)
+        # INDEMNITÉ (COHÉRENTE)
         # =========================
-        ind_clim = capital * indice_climatique
-        ind_risque = capital * 0.25 * risque_norm
-
-        indemn = max(ind_clim, ind_risque)
+        indemn = capital * indice_climatique * (0.3 + 0.7 * risque_norm)
         indemn = min(indemn, capital)
 
         # =========================
@@ -164,27 +164,60 @@ with col2:
         c1.metric("🔥 Risque", f"{risque:.1f}%")
         c2.metric("💳 Prime", f"{prime:.2f} DT")
 
-        st.metric("💰 Capital", f"{capital:.2f} DT")
+        st.metric("💰 Capital assuré", f"{capital:.2f} DT")
 
         st.divider()
 
+        # =========================
+        # SINISTRE LOGIQUE
+        # =========================
         if sinistre:
             st.error(f"💰 Indemnité estimée : {indemn:.2f} DT")
         else:
             st.success("✅ Aucun sinistre déclenché")
 
         # =========================
-        # INTERPRÉTATION
+        # INTERPRÉTATION PROPRE
         # =========================
         st.subheader("📌 Interprétation")
+
+        if pl < seuil:
+            etat = "⚠️ Sécheresse détectée"
+        elif pl < historique:
+            etat = "⚠️ Stress climatique modéré"
+        else:
+            etat = "✅ Conditions normales"
 
         st.write(f"""
 - Pluie observée : {pl:.1f} mm
 - Seuil régional : {seuil} mm
 - Historique : {historique} mm
+- État climatique : {etat}
 - Valeur/ha : {valeur_ha} DT
-- Capital : {capital:.2f} DT
+- Capital assuré : {capital:.2f} DT
 
-👉 Le système combine risque agricole + déficit climatique
-👉 L’indemnité est toujours cohérente avec le capital assuré
+👉 Le sinistre dépend uniquement du déficit climatique réel  
+👉 Le risque représente la probabilité, pas le déclenchement
+""")
+
+        # =========================
+        # FORMULES
+        # =========================
+        with st.expander("ℹ️ Formules du modèle"):
+
+            st.markdown("""
+### Capital
+Capital = (Superficie × Valeur/ha) + (Superficie × Rendement × 25)
+
+### Prime
+Prime = Capital × (0.02 + 0.015 × Risque)
+
+### Indice climatique
+Indice = 0.7 × déficit seuil + 0.3 × déficit historique
+
+### Indemnité
+Indemnité = Capital × Indice × (0.3 + 0.7 × Risque)
+
+### Condition sinistre
+Sinistre si Indice climatique > 0.10
 """)
