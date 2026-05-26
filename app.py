@@ -5,7 +5,7 @@ import requests
 
 st.set_page_config(page_title="Assurance Agricole", layout="wide")
 
-# STYLE CSS POUR NETTOYER L'INTERFACE
+# STYLE CSS
 st.markdown("""
 <style>
 h1 a, h2 a, h3 a, h4 a, h5 a, h6 a { display: none !important; }
@@ -13,23 +13,33 @@ h1 a, h2 a, h3 a, h4 a, h5 a, h6 a { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# 1. CONFIGURATION RÉGIONALE
+# 1. CHARGEMENT DU MODÈLE
+@st.cache_resource
+def load_model():
+    try:
+        return joblib.load("model.pkl")
+    except Exception as e:
+        st.error(f"Erreur lors du chargement du modèle : {e}")
+        return None
+
+model_rf = load_model()
+
+# 2. CONFIGURATION RÉGIONALE
 geo_conf = {
-    "Tunis": {"lat": 36.80, "lon": 10.18, "facteur": 0.9, "coeff": 4.0, "seuil": 30.0, "moyenne_20ans": 45.5},
-    "Nabeul": {"lat": 36.45, "lon": 10.73, "facteur": 0.85, "coeff": 4.5, "seuil": 32.0, "moyenne_20ans": 42.0},
-    "Bizerte": {"lat": 37.27, "lon": 9.87, "facteur": 0.8, "coeff": 3.5, "seuil": 35.0, "moyenne_20ans": 55.2},
-    "Beja": {"lat": 36.72, "lon": 9.18, "facteur": 0.75, "coeff": 3.0, "seuil": 40.0, "moyenne_20ans": 60.8},
-    "Sousse": {"lat": 35.82, "lon": 10.60, "facteur": 0.95, "coeff": 4.2, "seuil": 28.0, "moyenne_20ans": 38.4},
-    "Monastir": {"lat": 35.78, "lon": 10.83, "facteur": 0.95, "coeff": 4.2, "seuil": 28.0, "moyenne_20ans": 37.9},
-    "Kairouan": {"lat": 35.67, "lon": 10.10, "facteur": 1.15, "coeff": 5.5, "seuil": 22.0, "moyenne_20ans": 25.1},
-    "Kebili": {"lat": 33.70, "lon": 8.97, "facteur": 1.4, "coeff": 7.0, "seuil": 10.0, "moyenne_20ans": 12.5},
-    "Gabes": {"lat": 33.88, "lon": 10.09, "facteur": 1.3, "coeff": 6.5, "seuil": 15.0, "moyenne_20ans": 18.2},
-    "Médenine": {"lat": 33.35, "lon": 10.49, "facteur": 1.5, "coeff": 7.5, "seuil": 8.0, "moyenne_20ans": 10.5}
+    "Tunis": {"lat": 36.80, "lon": 10.18, "facteur": 0.9, "coeff": 4.0, "seuil": 30.0},
+    "Nabeul": {"lat": 36.45, "lon": 10.73, "facteur": 0.85, "coeff": 4.5, "seuil": 32.0},
+    "Bizerte": {"lat": 37.27, "lon": 9.87, "facteur": 0.8, "coeff": 3.5, "seuil": 35.0},
+    "Beja": {"lat": 36.72, "lon": 9.18, "facteur": 0.75, "coeff": 3.0, "seuil": 40.0},
+    "Sousse": {"lat": 35.82, "lon": 10.60, "facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
+    "Monastir": {"lat": 35.78, "lon": 10.83, "facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
+    "Kairouan": {"lat": 35.67, "lon": 10.10, "facteur": 1.15, "coeff": 5.5, "seuil": 22.0},
+    "Kebili": {"lat": 33.70, "lon": 8.97, "facteur": 1.4, "coeff": 7.0, "seuil": 10.0},
+    "Gabes": {"lat": 33.88, "lon": 10.09, "facteur": 1.3, "coeff": 6.5, "seuil": 15.0},
+    "Médenine": {"lat": 33.35, "lon": 10.49, "facteur": 1.5, "coeff": 7.5, "seuil": 8.0}
 }
 
-# 2. RÉCUPÉRATION DONNÉES NASA POWER (Climatologie mensuelle)
-# L'utilisation de (lat, lon, mois) dans le cache force la mise à jour si ces valeurs changent
-@st.cache_data(show_spinner=True)
+# 3. RÉCUPÉRATION DONNÉES NASA POWER
+@st.cache_data(ttl=86400)
 def get_nasa_data(lat, lon, mois):
     url = f"https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,PRECTOTCORR,RH2M,WS10M&community=AG&longitude={lon}&latitude={lat}&format=JSON"
     try:
@@ -40,7 +50,7 @@ def get_nasa_data(lat, lon, mois):
     except:
         return 20.0, 30.0, 50.0, 5.0
 
-# 3. INTERFACE
+# 4. INTERFACE UTILISATEUR
 st.markdown("<h1 style='font-size:38px;'>🌾 Système Intelligent d’Assurance Agricole</h1>", unsafe_allow_html=True)
 col1, col2 = st.columns([1, 2])
 
@@ -55,7 +65,6 @@ with col1:
 
 with col2:
     cfg = geo_conf[region]
-    # APPEL NASA
     t, pl, hum, vent = get_nasa_data(cfg['lat'], cfg['lon'], mois)
     
     st.markdown("<h2>📊 Données Climatiques (Source: NASA POWER)</h2>", unsafe_allow_html=True)
