@@ -35,7 +35,7 @@ regions = {
 }
 
 # =========================
-# CONFIGURATION RÉGIONALE
+# CONFIGURATION
 # =========================
 geo_conf = {
     "Tunis": {"facteur": 0.9, "seuil": 30.0, "historique": 45.5},
@@ -76,23 +76,20 @@ def get_nasa_weather(region, mois):
     data = requests.get(url, timeout=30).json()
     params = data["properties"]["parameter"]
 
-    temp = pd.Series(params["T2M"]).mean()
-    pluie = pd.Series(params["PRECTOTCORR"]).sum()
-    humidite = pd.Series(params["RH2M"]).mean()
-    vent = pd.Series(params["WS2M"]).mean()
-
-    return temp, pluie, humidite, vent
+    return (
+        pd.Series(params["T2M"]).mean(),
+        pd.Series(params["PRECTOTCORR"]).sum(),
+        pd.Series(params["RH2M"]).mean(),
+        pd.Series(params["WS2M"]).mean()
+    )
 
 # =========================
-# TITRE
+# INTERFACE
 # =========================
 st.markdown("<h1>🌾 Assurance Agricole Paramétrique</h1>", unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 2])
 
-# =========================
-# INPUTS
-# =========================
 with col1:
 
     st.markdown("### ⚙️ Paramètres")
@@ -108,9 +105,6 @@ with col1:
 
     btn = st.button("🚀 Lancer analyse", type="primary")
 
-# =========================
-# OUTPUT
-# =========================
 with col2:
 
     try:
@@ -122,12 +116,12 @@ with col2:
     cfg = geo_conf[region]
 
     # =========================
-    # VALEUR PAR HECTARE
+    # VALEUR / HECTARE
     # =========================
     valeur_ha = 180 if culture == "Céréales" else 300
 
-    st.markdown("## 📊 Données climatiques (NASA POWER)")
-    st.markdown("Source officielle : https://power.larc.nasa.gov/")
+    st.markdown("## 📊 Données climatiques")
+    st.info("Source : NASA POWER")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Température", f"{t:.1f} °C")
@@ -140,7 +134,7 @@ with col2:
     # =========================
     if btn:
 
-        # 🔥 RISQUE
+        # 🔥 RISQUE (cohérent)
         risque = min(
             max(
                 (25 * cfg["facteur"]) + (15 if irrigation == "Non" else 0),
@@ -154,23 +148,23 @@ with col2:
         # =========================
         # CAPITAL
         # =========================
-        production_totale = superficie * rendement
-        capital = (superficie * valeur_ha) + (production_totale * 25)
+        production = superficie * rendement
+
+        capital = (superficie * valeur_ha) + (production * 25)
 
         # =========================
-        # PRIME (corrigée simple)
+        # PRIME (stable)
         # =========================
         prime = capital * (0.02 + 0.015 * risque_norm)
 
         # =========================
-        # INDEMNITÉ (CORRIGÉE + COHÉRENTE)
+        # INDEMNITÉ (CORRIGÉE)
         # =========================
         seuil = cfg["seuil"]
 
-        pluie_factor = max(0, (seuil - pl) / seuil)
-        risk_factor = 0.3 + 0.7 * risque_norm
+        deficit = max(0, (seuil - pl) / seuil)
 
-        indemn = capital * pluie_factor * risk_factor
+        indemn = capital * deficit * (0.4 + 0.6 * risque_norm)
 
         # =========================
         # AFFICHAGE
@@ -185,9 +179,6 @@ with col2:
 
         st.divider()
 
-        # =========================
-        # DÉCLENCHEMENT
-        # =========================
         if pl < seuil:
             st.error(f"💰 Indemnité déclenchée : {indemn:.2f} DT")
         else:
@@ -203,7 +194,7 @@ with col2:
 - 💰 Valeur/ha : {valeur_ha} DT
 - 📊 Rendement : {rendement} T/ha
 - 📉 Pluie : {pl:.1f} mm
-- 🎯 Seuil régional : {seuil} mm
+- 🎯 Seuil : {seuil} mm
 - 📈 Historique : {cfg['historique']} mm
 
 👉 Le capital dépend de la surface + rendement + culture  
@@ -224,5 +215,5 @@ Capital = (Superficie × Valeur/ha) + (Superficie × Rendement × 25)
 Prime = Capital × (0.02 + 0.015 × Risque)
 
 ### 💰 Indemnité
-Indemnité = Capital × max(0, (Seuil - Pluie)/Seuil) × (0.3 + 0.7 × Risque)
+Indemnité = Capital × max(0, (Seuil - Pluie)/Seuil) × (0.4 + 0.6 × Risque)
 """)
