@@ -5,7 +5,15 @@ import requests
 
 st.set_page_config(page_title="Assurance Agricole", layout="wide")
 
-# 1. CONFIGURATION RÉGIONALE (Ajout des coordonnées pour NASA)
+# STYLE CSS POUR NETTOYER L'INTERFACE
+st.markdown("""
+<style>
+h1 a, h2 a, h3 a, h4 a, h5 a, h6 a { display: none !important; }
+[data-testid="stHeaderActionElements"] { display: none !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# 1. CONFIGURATION RÉGIONALE
 geo_conf = {
     "Tunis": {"lat": 36.80, "lon": 10.18, "facteur": 0.9, "coeff": 4.0, "seuil": 30.0, "moyenne_20ans": 45.5},
     "Nabeul": {"lat": 36.45, "lon": 10.73, "facteur": 0.85, "coeff": 4.5, "seuil": 32.0, "moyenne_20ans": 42.0},
@@ -20,24 +28,24 @@ geo_conf = {
 }
 
 # 2. RÉCUPÉRATION DONNÉES NASA POWER (Climatologie mensuelle)
-@st.cache_data(ttl=86400)
+# L'utilisation de (lat, lon, mois) dans le cache force la mise à jour si ces valeurs changent
+@st.cache_data(show_spinner=True)
 def get_nasa_data(lat, lon, mois):
-    # Appel API NASA POWER
     url = f"https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,PRECTOTCORR,RH2M,WS10M&community=AG&longitude={lon}&latitude={lat}&format=JSON"
     try:
         response = requests.get(url, timeout=10).json()
         data = response['properties']['parameter']
         m_str = str(mois)
-        # T2M=Température, PRECTOTCORR=Pluie, RH2M=Humidité, WS10M=Vent
         return data['T2M'][m_str], data['PRECTOTCORR'][m_str], data['RH2M'][m_str], data['WS10M'][m_str]
     except:
-        return 20.0, 30.0, 50.0, 5.0 # Valeurs par défaut
+        return 20.0, 30.0, 50.0, 5.0
 
 # 3. INTERFACE
 st.markdown("<h1 style='font-size:38px;'>🌾 Système Intelligent d’Assurance Agricole</h1>", unsafe_allow_html=True)
 col1, col2 = st.columns([1, 2])
 
 with col1:
+    st.markdown("<h3>⚙️ Paramètres</h3>", unsafe_allow_html=True)
     region = st.selectbox("Région", list(geo_conf.keys()))
     mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=4)
     irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
@@ -47,13 +55,13 @@ with col1:
 
 with col2:
     cfg = geo_conf[region]
-    # Appel de la fonction NASA
+    # APPEL NASA
     t, pl, hum, vent = get_nasa_data(cfg['lat'], cfg['lon'], mois)
     
     st.markdown("<h2>📊 Données Climatiques (Source: NASA POWER)</h2>", unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f} °C")
-    m2.metric("Pluie", f"{pl:.1f} mm")
+    m2.metric("Précipitations", f"{pl:.1f} mm")
     m3.metric("Vent", f"{vent:.1f} m/s")
     m4.metric("Humidité", f"{hum:.1f} %")
 
@@ -68,7 +76,10 @@ with col2:
         c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         
+        st.divider()
         if pl < cfg["seuil"]:
             st.error(f"💰 Indemnité de sinistre : {(((cfg['seuil'] - pl) / cfg['seuil']) * cap_max):.2f} DT")
+        elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
+            st.warning(f"⚠️ Stress hydrique : Franchise appliquée (5%) : {(cap_max * 0.05):.2f} DT")
         else:
             st.success("✅ Conditions climatiques favorables.")
