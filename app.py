@@ -13,13 +13,12 @@ h1 a, h2 a, h3 a, h4 a, h5 a, h6 a { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# 1. CHARGEMENT DU MODÈLE
+# 1. CHARGEMENT SÉCURISÉ DU MODÈLE
 @st.cache_resource
 def load_model():
     try:
         return joblib.load("model.pkl")
-    except Exception as e:
-        st.error(f"Erreur lors du chargement du modèle : {e}")
+    except:
         return None
 
 model_rf = load_model()
@@ -43,14 +42,16 @@ geo_conf = {
 def get_nasa_data(lat, lon, mois):
     url = f"https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,PRECTOTCORR,RH2M,WS10M&community=AG&longitude={lon}&latitude={lat}&format=JSON"
     try:
-        response = requests.get(url, timeout=10).json()
-        data = response['properties']['parameter']
-        m_str = str(mois)
-        return data['T2M'][m_str], data['PRECTOTCORR'][m_str], data['RH2M'][m_str], data['WS10M'][m_str]
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()['properties']['parameter']
+            m_str = str(mois)
+            return data['T2M'][m_str], data['PRECTOTCORR'][m_str], data['RH2M'][m_str], data['WS10M'][m_str]
     except:
-        return 20.0, 30.0, 50.0, 5.0
+        pass
+    return 20.0, 30.0, 50.0, 5.0 # Valeurs de secours si échec
 
-# 4. INTERFACE UTILISATEUR
+# 4. INTERFACE
 st.markdown("<h1 style='font-size:38px;'>🌾 Système Intelligent d’Assurance Agricole</h1>", unsafe_allow_html=True)
 col1, col2 = st.columns([1, 2])
 
@@ -87,8 +88,4 @@ with col2:
         
         st.divider()
         if pl < cfg["seuil"]:
-            st.error(f"💰 Indemnité de sinistre : {(((cfg['seuil'] - pl) / cfg['seuil']) * cap_max):.2f} DT")
-        elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
-            st.warning(f"⚠️ Stress hydrique : Franchise appliquée (5%) : {(cap_max * 0.05):.2f} DT")
-        else:
-            st.success("✅ Conditions climatiques favorables.")
+            st.error
