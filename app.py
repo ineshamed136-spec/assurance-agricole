@@ -19,12 +19,6 @@ h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
 [data-testid="stHeaderActionElements"] {
     display: none !important;
 }
-
-.metric-box {
-    padding: 10px;
-    border-radius: 10px;
-    background-color: #f7f7f7;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -55,8 +49,8 @@ geo_conf = {
     "Sousse": {"facteur": 0.95, "seuil": 28.0, "historique": 38.4},
     "Monastir": {"facteur": 0.95, "seuil": 28.0, "historique": 37.9},
     "Kairouan": {"facteur": 1.15, "seuil": 22.0, "historique": 25.1},
-    "Gabes": {"facteur": 1.3, "seuil": 15.0, "historique": 18.2},
     "Kebili": {"facteur": 1.4, "seuil": 10.0, "historique": 12.5},
+    "Gabes": {"facteur": 1.3, "seuil": 15.0, "historique": 18.2},
     "Médenine": {"facteur": 1.5, "seuil": 8.0, "historique": 10.5}
 }
 
@@ -103,7 +97,7 @@ st.title("🌾 Assurance Agricole Paramétrique")
 col1, col2 = st.columns([1, 2])
 
 # =========================
-# COLONNE PARAMÈTRES
+# PARAMÈTRES
 # =========================
 with col1:
 
@@ -148,7 +142,7 @@ with col1:
     )
 
 # =========================
-# COLONNE RÉSULTATS
+# RÉSULTATS
 # =========================
 with col2:
 
@@ -156,7 +150,7 @@ with col2:
         t, pl, hum, vent = get_nasa_weather(region, mois)
 
     except:
-        st.error("Erreur lors de la récupération des données NASA POWER.")
+        st.error("Erreur NASA POWER API")
         st.stop()
 
     cfg = geo_conf[region]
@@ -188,7 +182,7 @@ with col2:
             + (15 if irrigation == "Non" else 0)
         )
 
-        # Bonus si pluie sous historique
+        # augmentation si pluie sous historique
         if pl < cfg["historique"]:
             risque += 10
 
@@ -210,7 +204,7 @@ with col2:
         # PRIME
         # =========================
         prime = capital * (
-            0.025 + (0.03 * risque_norm)
+            0.02 + 0.015 * risque_norm
         )
 
         # =========================
@@ -235,25 +229,15 @@ with col2:
         )
 
         # =========================
-        # INDEMNITÉ COHÉRENTE
+        # INDEMNITÉ
         # =========================
-        # Minimum d'indemnité si risque élevé
-        indemn_min = capital * risque_norm * 0.08
-
-        # Indemnité climatique
-        indemn_climatique = (
+        indemn = (
             capital
             * indice_climatique
-            * (0.5 + risque_norm)
+            * risque_norm
         )
 
-        # On prend la plus grande valeur
-        indemn = max(
-            indemn_min,
-            indemn_climatique
-        )
-
-        # Limite maximale
+        # plafond maximum
         indemn = min(indemn, capital * 0.8)
 
         # =========================
@@ -281,15 +265,17 @@ with col2:
         st.divider()
 
         # =========================
-        # LOGIQUE SINISTRE
+        # SINISTRE
         # =========================
-        if risque >= 30:
-            st.warning(
+        if indemn > 0:
+            st.error(
                 f"💰 Indemnité estimée : {indemn:.2f} DT"
             )
 
         else:
-            st.success("✅ Risque faible")
+            st.success(
+                "✅ Aucun sinistre déclenché"
+            )
 
         # =========================
         # INTERPRÉTATION
@@ -303,9 +289,8 @@ with col2:
 - Valeur par hectare : {valeur_ha} DT
 - Capital assuré : {capital:.2f} DT
 
-👉 Le calcul combine les données climatiques réelles,
-le niveau de risque régional et les caractéristiques
-de l’exploitation agricole.
+👉 Le calcul combine les données climatiques
+réelles et les paramètres régionaux de sécheresse.
 """)
 
         # =========================
@@ -318,14 +303,11 @@ de l’exploitation agricole.
 Capital = (Superficie × Valeur/ha) + (Production × 25)
 
 ### 💳 Prime d’assurance
-Prime = Capital × (0.025 + 0.03 × Risque)
+Prime = Capital × (0.02 + 0.015 × Risque)
 
 ### 🌧️ Indice climatique
 Indice climatique = 0.7 × déficit seuil + 0.3 × déficit historique
 
 ### 💰 Indemnité
-Indemnité = max(
-Indemnité minimale liée au risque,
-Indemnité climatique
-)
+Indemnité = Capital × Indice climatique × Risque normalisé
 """)
