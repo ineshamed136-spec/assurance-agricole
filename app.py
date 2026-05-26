@@ -32,7 +32,7 @@ def load_model():
 model_rf, model_charge = load_model()
 
 # =========================
-# COORDONNÉES DES RÉGIONS
+# RÉGIONS (coordonnées)
 # =========================
 regions = {
     "Tunis": (36.8065, 10.1815),
@@ -86,9 +86,7 @@ def get_nasa_weather(region, mois):
         f"&format=JSON"
     )
 
-    response = requests.get(url, timeout=30)
-    data = response.json()
-
+    data = requests.get(url, timeout=30).json()
     params = data["properties"]["parameter"]
 
     temp = pd.Series(params["T2M"]).mean()
@@ -96,24 +94,21 @@ def get_nasa_weather(region, mois):
     humidite = pd.Series(params["RH2M"]).mean()
     vent = pd.Series(params["WS2M"]).mean()
 
-    return round(temp, 1), round(pluie, 1), round(humidite, 1), round(vent, 1)
+    return temp, pluie, humidite, vent
 
 # =========================
 # INTERFACE
 # =========================
-st.markdown(
-    "<h1 style='font-size:38px;'>🌾 Système Intelligent d’Assurance Agricole</h1>",
-    unsafe_allow_html=True
-)
+st.markdown("<h1>🌾 Système Intelligent d’Assurance Agricole</h1>", unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 2])
 
 # =========================
-# PARAMÈTRES
+# INPUTS
 # =========================
 with col1:
 
-    st.markdown("<h3>⚙️ Paramètres Agricoles</h3>", unsafe_allow_html=True)
+    st.markdown("### ⚙️ Paramètres")
 
     region = st.selectbox("Région", list(regions.keys()))
     mois = st.selectbox("Mois", list(range(1, 13)), index=4)
@@ -121,38 +116,37 @@ with col1:
     irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
 
     sup = st.number_input("Superficie (Ha)", value=15.0, min_value=1.0)
-    prod = st.number_input("Rendement attendu (T/Ha)", value=4.0, min_value=0.1)
+    prod = st.number_input("Rendement (T/Ha)", value=4.0, min_value=0.1)
 
-    btn = st.button("🚀 LANCER L'ANALYSE", type="primary")
+    btn = st.button("🚀 Analyser", type="primary")
 
 # =========================
-# DONNÉES CLIMATIQUES
+# OUTPUT
 # =========================
 with col2:
 
     try:
         t, pl, hum, vent = get_nasa_weather(region, mois)
     except:
-        st.error("Erreur API NASA POWER")
+        st.error("Erreur NASA POWER")
         st.stop()
 
     cfg = geo_conf[region]
 
-    st.markdown("<h2>📊 Données Climatiques Réelles</h2>", unsafe_allow_html=True)
-    st.info("Source : NASA POWER")
+    st.markdown("### 📊 Données NASA POWER")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Température", f"{t} °C")
-    c2.metric("Pluie", f"{pl} mm")
-    c3.metric("Vent", f"{vent} m/s")
-    c4.metric("Humidité", f"{hum} %")
+    c1.metric("Température", f"{t:.1f} °C")
+    c2.metric("Pluie", f"{pl:.1f} mm")
+    c3.metric("Vent", f"{vent:.1f} m/s")
+    c4.metric("Humidité", f"{hum:.1f} %")
 
     # =========================
     # ANALYSE
     # =========================
     if btn:
 
-        # 🔥 RISQUE GLOBAL
+        # 🔥 RISQUE
         risque_final = min(
             max(
                 (25.0 * cfg["facteur"])
@@ -163,70 +157,61 @@ with col2:
             95.0
         )
 
+        risque_norm = risque_final / 100
+
         prod_totale = sup * prod
         cap_max = (sup * 200) + (prod_totale * 25)
 
-        # 💳 PRIME
+        # 💳 PRIME (corrélée au risque)
+        beta = 20
+
         prime = (
-            (risque_final * cfg["coeff"])
-            + (sup * 12)
-            + (prod_totale * 1.1)
+            beta * risque_final
+            + sup * 12
+            + prod_totale * 1.1
         )
 
         st.divider()
 
         colA, colB = st.columns(2)
-
-        colA.metric("🔥 Risque Global", f"{risque_final:.1f} %")
+        colA.metric("🔥 Risque", f"{risque_final:.1f} %")
         colB.metric("💳 Prime", f"{prime:.2f} DT")
 
         st.divider()
 
         # =========================
-        # INDICE DE DÉFICIT
+        # INDEMNITÉ (corrélée risque)
         # =========================
         if pl < cfg["seuil"]:
 
             deficit = (cfg["seuil"] - pl) / cfg["seuil"]
 
-            # 🔥 CORRÉLATION RISQUE / INDEMNITÉ
             alpha = 0.8
 
-            indemn = cap_max * deficit * (1 + alpha * (risque_final / 100))
+            indemn = cap_max * deficit * (1 + alpha * risque_norm)
 
-            st.error(f"💰 Indemnité de sinistre : {indemn:.2f} DT")
+            st.error(f"💰 Indemnité : {indemn:.2f} DT")
 
         elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
 
-            franchise = cap_max * 0.05
-            st.warning(f"⚠️ Stress hydrique : {franchise:.2f} DT")
+            st.warning(f"⚠️ Stress hydrique")
 
         else:
-            st.success("✅ Conditions climatiques favorables.")
+            st.success("✅ Conditions normales")
 
         # =========================
         # INTERPRÉTATION
         # =========================
-        st.markdown("## 📌 Interprétation")
+        st.markdown("### 📌 Interprétation")
 
         if pl < cfg["seuil"]:
             st.write("Sécheresse détectée → risque élevé.")
-        elif pl < cfg["moyenne_20ans"]:
-            st.write("Conditions légèrement défavorables.")
         else:
-            st.write("Conditions normales.")
+            st.write("Conditions normales ou acceptables.")
 
         # =========================
-        # MÉTHODOLOGIE
+        # NASA POWER SOURCE
         # =========================
-        with st.expander("ℹ️ Méthodologie"):
+        st.markdown("### 🌍 Source des données")
 
-            st.markdown(f"""
-            - Seuil régional : {cfg['seuil']} mm  
-            - Moyenne historique : {cfg['moyenne_20ans']} mm  
-            - Risque issu d’un modèle heuristique  
-            """)
-
-            st.latex(
-                r"Indemnité = Capital \times Déficit \times (1 + \alpha \times Risque)"
-            )
+        st.write("NASA POWER API : https://power.larc.nasa.gov/docs/services/api/")
