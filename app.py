@@ -141,8 +141,9 @@ with col2:
         unsafe_allow_html=True
     )
 
-    st.caption(
-        "Sources des données : NASA POWER"
+    # LIEN NASA POWER ACTIF
+    st.markdown(
+        "Sources des données : [NASA POWER](https://power.larc.nasa.gov/)"
     )
 
     # =====================
@@ -188,9 +189,7 @@ with col2:
             95.0
         )
 
-        # =====================
         # CALCULS
-        # =====================
         prod_totale = sup * prod
 
         prime = (
@@ -279,8 +278,7 @@ with col2:
 
                 <p>
                 <b>Sources des données :</b>
-                <a href="https://power.larc.nasa.gov/"
-                target="_blank">
+                <a href="https://power.larc.nasa.gov/" target="_blank">
                 NASA POWER
                 </a>
                 </p>
