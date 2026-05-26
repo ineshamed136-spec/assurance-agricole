@@ -71,7 +71,6 @@ with col2:
     st.markdown("<h2>📊 Données Climatiques</h2>", unsafe_allow_html=True)
     st.markdown("Sources des données : NASA POWER (power.larc.nasa.gov)")
 
-    # Affichage des métriques corrigé (sans rupture de ligne dans les f-strings)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f} °C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
@@ -79,5 +78,37 @@ with col2:
     m4.metric("Humidité", f"{hum:.1f} %")
 
     if btn:
-        # Logique de calcul
-        risque_final = min(max((25.0 * cfg["facteur"]) + (mois * 0.5) + (15 if irrigation
+        # Calcul du risque avec structure sécurisée
+        val_irrigation = 15 if irrigation == "Non" else 0
+        risque_base = (25.0 * cfg["facteur"]) + (mois * 0.5) + val_irrigation
+        risque_final = min(max(risque_base, 5.0), 95.0)
+        
+        prod_totale = sup * prod
+        prime = (risque_final * cfg["coeff"]) + (sup * 12) + (prod_totale * 1.1)
+        cap_max = (sup * 200) + (prod_totale * 25)
+
+        st.divider()
+        c1, c2 = st.columns(2)
+        c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
+        c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
+        
+        st.divider()
+        if pl < cfg["seuil"]:
+            indemnite = ((cfg['seuil'] - pl) / cfg['seuil']) * cap_max
+            st.error(f"💰 Indemnité de sinistre : {indemnite:.2f} DT")
+        elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
+            st.warning(f"⚠️ Stress hydrique : Indemnité de franchise : {(cap_max * 0.05):.2f} DT")
+        else:
+            st.success("✅ Conditions climatiques optimales.")
+
+        with st.expander("ℹ️ Méthodologie et logique paramétrique"):
+            st.markdown(f"""
+            <h3>🛡️ Le Capital Maximum</h3>
+            <p>Valeur assurée : (Sup * 200) + (Prod * 25).</p>
+            <h3>💧 Déclenchement</h3>
+            <ul>
+                <li><b>Moyenne 20 ans :</b> {cfg['moyenne_20ans']} mm</li>
+                <li><b>Seuil :</b> {cfg['seuil']} mm</li>
+            </ul>
+            """, unsafe_allow_html=True)
+            st.latex(r"Prime
