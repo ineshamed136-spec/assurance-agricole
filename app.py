@@ -78,7 +78,7 @@ with col2:
     m4.metric("Humidité", f"{hum:.1f} %")
 
     if btn:
-        # Calcul du risque avec structure sécurisée
+        # Calcul du risque
         val_irrigation = 15 if irrigation == "Non" else 0
         risque_base = (25.0 * cfg["facteur"]) + (mois * 0.5) + val_irrigation
         risque_final = min(max(risque_base, 5.0), 95.0)
@@ -111,4 +111,5 @@ with col2:
                 <li><b>Seuil :</b> {cfg['seuil']} mm</li>
             </ul>
             """, unsafe_allow_html=True)
-            st.latex(r"Prime
+            # Correction faite ici
+            st.latex(r"Prime = (Risque \times Coeff) + (Sup \times 12) + (Prod \times 1.1)")
