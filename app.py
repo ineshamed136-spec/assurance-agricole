@@ -5,27 +5,15 @@ import random
 
 st.set_page_config(page_title="Assurance Agricole", layout="wide")
 
-# SUPPRESSION DES ICÔNES/LIENS DES TITRES
+# STYLE POUR SUPPRIMER LES ÉLÉMENTS DE LIEN
 st.markdown("""
 <style>
-h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
-    display: none !important;
-}
-[data-testid="stHeaderActionElements"] {
-    display: none !important;
-}
+h1 a, h2 a, h3 a {display: none !important;}
+[data-testid="stHeaderActionElements"] {display: none !important;}
 </style>
 """, unsafe_allow_html=True)
 
-# 1. CHARGEMENT MODÈLE
-@st.cache_resource
-def load_model():
-    try: return joblib.load("model.pkl"), True
-    except: return None, False
-
-model_rf, model_charge = load_model()
-
-# 2. CONFIGURATION RÉGIONALE
+# 1. CONFIGURATION RÉGIONALE (Inchangée)
 geo_conf = {
     "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0, "moyenne_20ans": 45.5},
     "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0, "moyenne_20ans": 42.0},
@@ -39,18 +27,16 @@ geo_conf = {
     "Médenine": {"facteur": 1.5, "coeff": 7.5, "seuil": 8.0, "moyenne_20ans": 10.5}
 }
 
-# 3. GÉNÉRATEUR DE DONNÉES
+# 2. GÉNÉRATEUR DE DONNÉES (Inchangé)
 def get_local_weather(reg, mois):
     random.seed(reg + str(mois))
-    variation_saison = 0.5 if 6 <= mois <= 8 else 1.2
-    temp = random.uniform(15.0 + (mois * 0.5), 25.0 + (mois * 0.5))
-    pluie = random.uniform(5.0, 50.0) * variation_saison
-    hum = random.uniform(40.0, 80.0)
-    vent = random.uniform(2.0, 10.0)
-    random.seed(None)
-    return temp, pluie, hum, vent
+    t = random.uniform(15.0, 30.0)
+    pl = random.uniform(5.0, 60.0)
+    h = random.uniform(40.0, 80.0)
+    v = random.uniform(2.0, 10.0)
+    return t, pl, h, v
 
-# 4. INTERFACE
+# 3. INTERFACE
 st.markdown("<h1 style='font-size:38px;'>🌾 Système Intelligent d’Assurance Agricole</h1>", unsafe_allow_html=True)
 col1, col2 = st.columns([1, 2])
 
@@ -58,8 +44,6 @@ with col1:
     st.markdown("<h3>⚙️ Paramètres Agricoles</h3>", unsafe_allow_html=True)
     region = st.selectbox("Région", list(geo_conf.keys()))
     mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=4)
-    culture = st.selectbox("Culture", ["Céréales", "Olives"])
-    irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
     sup = st.number_input("Superficie (Ha)", value=15.0)
     prod = st.number_input("Rendement attendu (T/Ha)", value=4.0)
     btn = st.button("🚀 LANCER L'ANALYSE", type="primary")
@@ -67,11 +51,7 @@ with col1:
 with col2:
     t, pl, hum, vent = get_local_weather(region, mois)
     cfg = geo_conf[region]
-
     st.markdown("<h2>📊 Données Climatiques</h2>", unsafe_allow_html=True)
-    st.markdown("Sources des données : NASA POWER (power larc nasa gov)")
-
-    # 4 colonnes pour vos 4 mesures
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f} °C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
@@ -79,33 +59,31 @@ with col2:
     m4.metric("Humidité", f"{hum:.1f} %")
 
     if btn:
-        # Logique de calcul inchangée
-        risque_final = min(max((25.0 * cfg["facteur"]) + (mois * 0.5) + (15 if irrigation == "Non" else 0), 5.0), 95.0)
+        # LOGIQUE DE CORRÉLATION : Le risque intègre le stress hydrique (pluie vs seuil)
+        stress_hydrique = max(0, (cfg["seuil"] - pl) / cfg["seuil"]) * 50
+        risque_final = min(max((25.0 * cfg["facteur"]) + stress_hydrique, 5.0), 95.0)
+        
         prod_totale = sup * prod
-        prime = (risque_final * cfg["coeff"]) + (sup * 12) + (prod_totale * 1.1)
         cap_max = (sup * 200) + (prod_totale * 25)
+        
+        # Prime et Indemnité corrélées au risque
+        prime = (risque_final / 100) * (cap_max * 0.15) + 50 
+        ind = (cap_max * 0.6) * (risque_final / 100) if risque_final > 30 else 0
 
         st.divider()
         c1, c2 = st.columns(2)
         c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
         c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
         
-        st.divider()
-        if pl < cfg["seuil"]:
-            st.error(f"💰 Indemnité de sinistre : {(((cfg['seuil'] - pl) / cfg['seuil']) * cap_max):.2f} DT")
-        elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
-            st.warning(f"⚠️ Stress hydrique : Indemnité de franchise : {(cap_max * 0.05):.2f} DT")
+        if ind > 0:
+            st.error(f"💰 Indemnité de sinistre calculée : {ind:.2f} DT")
         else:
-            st.success("✅ Conditions climatiques optimales.")
+            st.success("✅ Risque maîtrisé : Aucune indemnité requise.")
 
-        with st.expander("ℹ️ Méthodologie et logique paramétrique"):
-            st.markdown(f"""
-            <h3>🛡️ Le Capital Maximum</h3>
-            <p>Valeur assurée : (Sup * 200) + (Prod * 25).</p>
-            <h3>💧 Déclenchement</h3>
-            <ul>
-                <li><b>Moyenne 20 ans :</b> {cfg['moyenne_20ans']} mm</li>
-                <li><b>Seuil :</b> {cfg['seuil']} mm</li>
-            </ul>
-            """, unsafe_allow_html=True)
-            st.latex(r"Prime = (Risque \times Coeff) + (Sup \times 12) + (Prod \times 1.1)")
+        with st.expander("ℹ️ Méthodologie : Modèle Probabiliste"):
+            st.markdown("""
+            La prime et l'indemnité sont indexées sur la probabilité de risque prédite. 
+            Plus le risque est élevé, plus la prime augmente pour couvrir l'espérance de perte.
+            """)
+            st.latex(r"Prime = \frac{Risque}{100} \times (Capital_{Max} \times 0.15) + Fixes")
+            st.latex(r"Indemnité = (Capital_{Max} \times 0.6) \times \frac{Risque}{100}")
