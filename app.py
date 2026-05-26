@@ -55,7 +55,6 @@ geo_conf = {
 # =========================
 @st.cache_data(show_spinner=False)
 def get_nasa_weather(region, mois):
-
     lat, lon = regions[region]
     year = 2024
 
@@ -91,7 +90,6 @@ st.title("🌾 Assurance Agricole Paramétrique")
 col1, col2 = st.columns([1, 2])
 
 with col1:
-
     region = st.selectbox("Région", list(regions.keys()))
     mois = st.selectbox("Mois", list(range(1, 13)), index=4)
 
@@ -106,7 +104,6 @@ with col1:
 with col2:
 
     t, pl, hum, vent = get_nasa_weather(region, mois)
-
     cfg = geo_conf[region]
 
     valeur_ha = 180 if culture == "Céréales" else 300
@@ -142,7 +139,7 @@ with col2:
         prime = capital * (0.02 + 0.015 * risque_norm)
 
         # =========================
-        # INDICE CLIMATIQUE (CORRIGÉ)
+        # INDICE CLIMATIQUE
         # =========================
         seuil = cfg["seuil"]
         historique = cfg["historique"]
@@ -152,7 +149,9 @@ with col2:
 
         indice_climatique = 0.6 * deficit_seuil + 0.4 * deficit_historique
 
-        # 🔥 IMPORTANT : cohérence avec risque
+        # =========================
+        # INDEMNITÉ
+        # =========================
         indemn = capital * indice_climatique * (0.3 + 0.7 * risque_norm)
 
         # =========================
@@ -161,10 +160,8 @@ with col2:
         st.divider()
 
         c1, c2 = st.columns(2)
-        c1.metric("🔥 Risque", f"{risque:.1f}%")
-        c2.metric("💳 Prime", f"{prime:.2f} DT")
-
-        st.metric("💰 Capital", f"{capital:.2f} DT")
+        c1.metric("Prime", f"{prime:.2f} DT")
+        c2.metric("Capital", f"{capital:.2f} DT")
 
         st.divider()
 
@@ -174,21 +171,19 @@ with col2:
             st.success("✅ Aucun sinistre")
 
         # =========================
-        # INTERPRÉTATION
+        # INTERPRÉTATION (CORRIGÉE SELON TA DEMANDE)
         # =========================
         st.subheader("📌 Interprétation")
 
         st.write(f"""
-- Culture : {culture}
 - Pluie : {pl:.1f} mm
 - Seuil : {seuil} mm
 - Historique : {historique} mm
-- Risque : {risque:.1f}%
+- Valeur/ha : {valeur_ha} DT
+- Capital assuré : {capital:.2f} DT
 
-👉 L’indemnité dépend de 3 facteurs :
-1. Déficit par rapport au seuil
-2. Déficit par rapport à l’historique
-3. Niveau de risque agricole
+👉 L’indemnité dépend uniquement du déficit climatique (seuil + historique)
+et de la sensibilité du contrat (facteur de risque).
 """)
 
         # =========================
@@ -205,6 +200,5 @@ Prime = Capital × (0.02 + 0.015 × Risque)
 
 ### Indemnité
 Indice climatique = 0.6 × déficit seuil + 0.4 × déficit historique  
-
 Indemnité = Capital × Indice climatique × (0.3 + 0.7 × Risque)
 """)
