@@ -4,15 +4,6 @@ import requests
 
 st.set_page_config(page_title="Assurance Agricole", layout="wide")
 
-# BLOC CSS NETTOYÉ
-# Note : Nous utilisons une chaîne de caractères simple sans caractères invisibles
-css = """
-<style>
-h1, h2, h3 { color: #2E7D32; }
-</style>
-"""
-st.markdown(css, unsafe_html=True)
-
 # 1. CHARGEMENT MODÈLE
 @st.cache_resource
 def load_model():
@@ -25,7 +16,6 @@ model_rf, model_charge = load_model()
 geo_conf = {
     "Tunis": {"lat": 36.8065, "lon": 10.1815, "seuil": 30.0},
     "Nabeul": {"lat": 36.4510, "lon": 10.7360, "seuil": 32.0}
-    # Ajoutez vos autres régions ici...
 }
 
 # 3. RÉCUPÉRATION DONNÉES
@@ -41,8 +31,13 @@ def get_weather(reg):
 
 # 4. INTERFACE
 st.title("🌾 Système d'Assurance Agricole")
+
 region = st.selectbox("Région", list(geo_conf.keys()))
 w = get_weather(region)
 
-st.metric("Température annuelle", f"{w['temp']:.1f} °C")
-st.metric("Précipitations", f"{w['pluie']:.1f} mm")
+# Utilisation des colonnes natives de Streamlit
+col1, col2 = st.columns(2)
+col1.metric("Température annuelle", f"{w['temp']:.1f} °C")
+col2.metric("Précipitations", f"{w['pluie']:.1f} mm")
+
+st.info("Données provenant de NASA POWER.")
