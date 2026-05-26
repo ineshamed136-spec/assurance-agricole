@@ -5,6 +5,19 @@ import random
 
 st.set_page_config(page_title="Assurance Agricole", layout="wide")
 
+# SUPPRESSION DES ICÔNES/LIENS DES TITRES
+st.markdown("""
+<style>
+h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
+    display: none !important;
+}
+
+[data-testid="stHeaderActionElements"] {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # 1. CHARGEMENT MODÈLE
 @st.cache_resource
 def load_model():
@@ -31,13 +44,20 @@ geo_conf = {
 
 # 3. GÉNÉRATEUR DE DONNÉES
 def get_local_weather(reg, mois):
+
     random.seed(reg + str(mois))
 
     variation_saison = 0.5 if 6 <= mois <= 8 else 1.2
 
-    temp = random.uniform(15.0 + (mois * 0.5), 25.0 + (mois * 0.5))
+    temp = random.uniform(
+        15.0 + (mois * 0.5),
+        25.0 + (mois * 0.5)
+    )
+
     pluie = random.uniform(5.0, 50.0) * variation_saison
+
     hum = random.uniform(40.0, 80.0)
+
     vent = random.uniform(2.0, 10.0)
 
     random.seed(None)
@@ -45,7 +65,10 @@ def get_local_weather(reg, mois):
     return temp, pluie, hum, vent
 
 
-# 4. INTERFACE
+# =========================
+# INTERFACE
+# =========================
+
 st.markdown(
     """
     <h1 style='font-size:38px;'>
@@ -67,7 +90,10 @@ with col1:
         unsafe_allow_html=True
     )
 
-    region = st.selectbox("Région", list(geo_conf.keys()))
+    region = st.selectbox(
+        "Région",
+        list(geo_conf.keys())
+    )
 
     mois = st.selectbox(
         "Mois (1-12)",
@@ -119,7 +145,9 @@ with col2:
         "Sources des données : NASA POWER"
     )
 
-    # METRICS
+    # =====================
+    # MÉTRIQUES
+    # =====================
     m1, m2, m3, m4 = st.columns(4)
 
     m1.metric(
@@ -147,15 +175,22 @@ with col2:
     # =====================
     if btn:
 
-        # RISQUE
-        risque_final = (25.0 * cfg["facteur"]) + (mois * 0.5)
+        risque_final = (
+            (25.0 * cfg["facteur"])
+            + (mois * 0.5)
+        )
 
         if irrigation == "Non":
             risque_final += 15
 
-        risque_final = min(max(risque_final, 5.0), 95.0)
+        risque_final = min(
+            max(risque_final, 5.0),
+            95.0
+        )
 
+        # =====================
         # CALCULS
+        # =====================
         prod_totale = sup * prod
 
         prime = (
@@ -191,7 +226,8 @@ with col2:
         if pl < cfg["seuil"]:
 
             ind = (
-                ((cfg["seuil"] - pl) / cfg["seuil"])
+                ((cfg["seuil"] - pl)
+                / cfg["seuil"])
                 * cap_max
             )
 
@@ -216,9 +252,11 @@ with col2:
             )
 
         # =====================
-        # EXPLICATIONS
+        # MÉTHODOLOGIE
         # =====================
-        with st.expander("ℹ️ Méthodologie et logique paramétrique"):
+        with st.expander(
+            "ℹ️ Méthodologie et logique paramétrique"
+        ):
 
             st.markdown(
                 f"""
@@ -226,15 +264,14 @@ with col2:
 
                 <p>
                 Représente la valeur totale assurée :
-                (Superficie × 200 DT/Ha) +
-                (Production Totale × 25 DT/T).
+                (Superficie × 200 DT/Ha)
+                + (Production Totale × 25 DT/T).
                 </p>
 
                 <h3>💳 Calcul de la Prime</h3>
 
                 <p>
-                La prime dépend :
-                du niveau de risque,
+                La prime dépend du niveau de risque,
                 du coefficient régional,
                 des frais fixes
                 et du rendement agricole.
@@ -270,5 +307,5 @@ with col2:
             )
 
             st.latex(
-                r"Indemnité_{Sinistre} = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{Max}"
+                r"Indemnité_{Sinistre} = \left(\frac{Seuil - Pluie}{Seuil}\right) \times Capital_{Max}"
             )
