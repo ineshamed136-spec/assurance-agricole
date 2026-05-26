@@ -160,8 +160,10 @@ with col2:
         st.divider()
 
         c1, c2 = st.columns(2)
-        c1.metric("Prime", f"{prime:.2f} DT")
-        c2.metric("Capital", f"{capital:.2f} DT")
+        c1.metric("🔥 Risque", f"{risque:.1f}%")
+        c2.metric("💳 Prime", f"{prime:.2f} DT")
+
+        st.metric("💰 Capital", f"{capital:.2f} DT")
 
         st.divider()
 
@@ -171,7 +173,7 @@ with col2:
             st.success("✅ Aucun sinistre")
 
         # =========================
-        # INTERPRÉTATION (CORRIGÉE SELON TA DEMANDE)
+        # INTERPRÉTATION (CORRIGÉE DEMANDÉE)
         # =========================
         st.subheader("📌 Interprétation")
 
@@ -182,23 +184,8 @@ with col2:
 - Valeur/ha : {valeur_ha} DT
 - Capital assuré : {capital:.2f} DT
 
-👉 L’indemnité dépend uniquement du déficit climatique (seuil + historique)
-et de la sensibilité du contrat (facteur de risque).
-""")
-
-        # =========================
-        # FORMULES
-        # =========================
-        with st.expander("ℹ️ Formules"):
-
-            st.markdown("""
-### Capital
-Capital = (Superficie × Valeur/ha) + (Superficie × Rendement × 25)
-
-### Prime
-Prime = Capital × (0.02 + 0.015 × Risque)
-
-### Indemnité
-Indice climatique = 0.6 × déficit seuil + 0.4 × déficit historique  
-Indemnité = Capital × Indice climatique × (0.3 + 0.7 × Risque)
+👉 L’indemnité dépend uniquement du déficit climatique :
+- déficit seuil
+- déficit historique
+- sensibilité du contrat
 """)
