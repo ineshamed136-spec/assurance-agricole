@@ -64,7 +64,7 @@ geo_conf = {
 }
 
 # =========================
-# NASA POWER
+# NASA POWER API
 # =========================
 @st.cache_data(show_spinner=False)
 def get_nasa_weather(region, mois):
@@ -104,7 +104,7 @@ st.markdown("<h1>🌾 Assurance Agricole Intelligente</h1>", unsafe_allow_html=T
 col1, col2 = st.columns([1, 2])
 
 # =========================
-# INPUT
+# INPUTS
 # =========================
 with col1:
 
@@ -132,8 +132,12 @@ with col2:
 
     cfg = geo_conf[region]
 
-    st.markdown("## 📊 Données climatiques (NASA POWER)")
-    st.info("Source officielle : https://power.larc.nasa.gov/")
+    # =========================
+    # DONNÉES CLIMATIQUES
+    # =========================
+    st.markdown("## 📊 Données climatiques")
+
+    st.markdown("Source officielle : https://power.larc.nasa.gov/")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Température", f"{t:.1f} °C")
@@ -162,7 +166,7 @@ with col2:
         prod_totale = sup * prod
         cap_max = (sup * 200) + (prod_totale * 25)
 
-        # 💳 PRIME (corrélée au risque)
+        # 💳 PRIME
         beta = 20
 
         prime = (
@@ -205,13 +209,13 @@ with col2:
             st.write("Conditions normales.")
 
         # =========================
-        # EXPLICATION MODÈLE
+        # MODÈLE + FORMULES
         # =========================
         with st.expander("ℹ️ Modèle et formules"):
 
             st.markdown("""
 ### ⚙️ Déclenchement
-L’indemnité est déclenchée si la pluie est inférieure au seuil régional.
+Indemnité activée si précipitations < seuil régional.
 
 ### 💳 Prime
 Prime = (β × Risque) + (Superficie × 12) + (Production × 1.1)
@@ -219,9 +223,8 @@ Prime = (β × Risque) + (Superficie × 12) + (Production × 1.1)
 ### 💰 Indemnité
 Indemnité = Capital × Déficit climatique × (1 + α × Risque)
 
-### 🌍 Données
-NASA POWER (NASA Langley Research Center)
-https://power.larc.nasa.gov/
+### 🌍 Source des données
+NASA POWER : https://power.larc.nasa.gov/
 """)
 
             st.latex(
