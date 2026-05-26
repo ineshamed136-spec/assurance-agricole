@@ -70,7 +70,6 @@ geo_conf = {
 def get_nasa_weather(region, mois):
 
     lat, lon = regions[region]
-
     year = 2024
 
     start = f"{year}{mois:02d}01"
@@ -110,78 +109,50 @@ st.markdown(
 col1, col2 = st.columns([1, 2])
 
 # =========================
-# COLONNE GAUCHE
+# PARAMÈTRES
 # =========================
 with col1:
 
     st.markdown("<h3>⚙️ Paramètres Agricoles</h3>", unsafe_allow_html=True)
 
     region = st.selectbox("Région", list(regions.keys()))
+    mois = st.selectbox("Mois", list(range(1, 13)), index=4)
+    culture = st.selectbox("Culture", ["Céréales", "Olives"])
+    irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
 
-    mois = st.selectbox(
-        "Mois",
-        list(range(1, 13)),
-        index=4
-    )
+    sup = st.number_input("Superficie (Ha)", value=15.0, min_value=1.0)
+    prod = st.number_input("Rendement attendu (T/Ha)", value=4.0, min_value=0.1)
 
-    culture = st.selectbox(
-        "Culture",
-        ["Céréales", "Olives"]
-    )
-
-    irrigation = st.radio(
-        "Irrigation",
-        ["Oui", "Non"],
-        horizontal=True
-    )
-
-    sup = st.number_input(
-        "Superficie (Ha)",
-        value=15.0,
-        min_value=1.0
-    )
-
-    prod = st.number_input(
-        "Rendement attendu (T/Ha)",
-        value=4.0,
-        min_value=0.1
-    )
-
-    btn = st.button(
-        "🚀 LANCER L'ANALYSE",
-        type="primary"
-    )
+    btn = st.button("🚀 LANCER L'ANALYSE", type="primary")
 
 # =========================
-# COLONNE DROITE
+# DONNÉES CLIMATIQUES
 # =========================
 with col2:
 
     try:
         t, pl, hum, vent = get_nasa_weather(region, mois)
-
-    except Exception as e:
+    except:
         st.error("Erreur API NASA POWER")
         st.stop()
 
     cfg = geo_conf[region]
 
     st.markdown("<h2>📊 Données Climatiques Réelles</h2>", unsafe_allow_html=True)
+    st.info("Source : NASA POWER")
 
-    st.info("Source officielle : NASA POWER")
-
-    m1, m2, m3, m4 = st.columns(4)
-
-    m1.metric("🌡️ Température moyenne", f"{t} °C")
-    m2.metric("🌧️ Précipitations mensuelles", f"{pl} mm")
-    m3.metric("💨 Vent moyen", f"{vent} m/s")
-    m4.metric("💧 Humidité moyenne", f"{hum} %")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Température", f"{t} °C")
+    c2.metric("Pluie", f"{pl} mm")
+    c3.metric("Vent", f"{vent} m/s")
+    c4.metric("Humidité", f"{hum} %")
 
     # =========================
     # ANALYSE
     # =========================
     if btn:
 
+        # 🔥 RISQUE GLOBAL
         risque_final = min(
             max(
                 (25.0 * cfg["facteur"])
@@ -193,58 +164,45 @@ with col2:
         )
 
         prod_totale = sup * prod
+        cap_max = (sup * 200) + (prod_totale * 25)
 
+        # 💳 PRIME
         prime = (
             (risque_final * cfg["coeff"])
             + (sup * 12)
             + (prod_totale * 1.1)
         )
 
-        cap_max = (
-            (sup * 200)
-            + (prod_totale * 25)
-        )
+        st.divider()
+
+        colA, colB = st.columns(2)
+
+        colA.metric("🔥 Risque Global", f"{risque_final:.1f} %")
+        colB.metric("💳 Prime", f"{prime:.2f} DT")
 
         st.divider()
 
-        c1, c2 = st.columns(2)
-
-        c1.metric(
-            "🔥 Risque Global",
-            f"{risque_final:.1f} %"
-        )
-
-        c2.metric(
-            "💳 Prime à payer",
-            f"{prime:.2f} DT"
-        )
-
-        st.divider()
-
+        # =========================
+        # INDICE DE DÉFICIT
+        # =========================
         if pl < cfg["seuil"]:
 
-            indemn = (
-                ((cfg["seuil"] - pl) / cfg["seuil"])
-                * cap_max
-            )
+            deficit = (cfg["seuil"] - pl) / cfg["seuil"]
 
-            st.error(
-                f"💰 Indemnité de sinistre : {indemn:.2f} DT"
-            )
+            # 🔥 CORRÉLATION RISQUE / INDEMNITÉ
+            alpha = 0.8
+
+            indemn = cap_max * deficit * (1 + alpha * (risque_final / 100))
+
+            st.error(f"💰 Indemnité de sinistre : {indemn:.2f} DT")
 
         elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
 
             franchise = cap_max * 0.05
-
-            st.warning(
-                f"⚠️ Stress hydrique : indemnité de franchise = {franchise:.2f} DT"
-            )
+            st.warning(f"⚠️ Stress hydrique : {franchise:.2f} DT")
 
         else:
-
-            st.success(
-                "✅ Conditions climatiques favorables."
-            )
+            st.success("✅ Conditions climatiques favorables.")
 
         # =========================
         # INTERPRÉTATION
@@ -252,44 +210,23 @@ with col2:
         st.markdown("## 📌 Interprétation")
 
         if pl < cfg["seuil"]:
-            st.write(
-                "Les précipitations observées sont inférieures au seuil régional de sécheresse. "
-                "Le risque agricole augmente fortement."
-            )
-
+            st.write("Sécheresse détectée → risque élevé.")
         elif pl < cfg["moyenne_20ans"]:
-            st.write(
-                "Les précipitations restent inférieures à la moyenne historique régionale."
-            )
-
+            st.write("Conditions légèrement défavorables.")
         else:
-            st.write(
-                "Les conditions climatiques sont proches ou supérieures aux normales saisonnières."
-            )
+            st.write("Conditions normales.")
 
         # =========================
         # MÉTHODOLOGIE
         # =========================
-        with st.expander("ℹ️ Méthodologie et logique paramétrique"):
+        with st.expander("ℹ️ Méthodologie"):
 
             st.markdown(f"""
-            ### 🛡️ Capital Maximum
-
-            Valeur assurée calculée selon :
-
-            - Superficie agricole
-            - Rendement attendu
-
-            ### 💧 Déclenchement du sinistre
-
-            - Moyenne historique : **{cfg['moyenne_20ans']} mm**
-            - Seuil de sécheresse : **{cfg['seuil']} mm**
-
-            ### 📡 Source climatique
-
-            Données climatiques réelles récupérées depuis NASA POWER.
+            - Seuil régional : {cfg['seuil']} mm  
+            - Moyenne historique : {cfg['moyenne_20ans']} mm  
+            - Risque issu d’un modèle heuristique  
             """)
 
             st.latex(
-                r"Prime = (Risque \times Coeff) + (Superficie \times 12) + (Production \times 1.1)"
+                r"Indemnité = Capital \times Déficit \times (1 + \alpha \times Risque)"
             )
