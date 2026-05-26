@@ -56,8 +56,8 @@ with col2:
     cfg = geo_conf[region]
     
     st.subheader("📊 Données Climatiques")
-    # Texte modifié pour supprimer la structure en "point" qui déclenche le lien automatique
-    st.caption("Sources des données : Projet NASA POWER")
+    # URL rendue non-détectable par le remplacement des points par des espaces
+    st.caption("Sources des données : NASA POWER (power larc nasa gov)")
     
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
@@ -97,7 +97,7 @@ with col2:
             ### 💳 La Prime (Coût du risque)
             Calculée via : Risque x Coeff + Frais fixes + Part variable.
             
-            * **Source des données :** Les paramètres climatiques sont appuyés par le projet NASA POWER.
+            * **Source des données :** NASA POWER (power larc nasa gov)
             
             ### 💧 Logique de Déclenchement (Trigger)
             * **Référence historique :** Moyenne sur 20 ans pour **{region}** : **{cfg['moyenne_20ans']} mm**.
