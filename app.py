@@ -73,70 +73,58 @@ def get_nasa_weather(region, mois):
         f"&format=JSON"
     )
 
-    data = requests.get(url, timeout=30).json()
+    data = requests.get(url).json()
     params = data["properties"]["parameter"]
 
-    temp = pd.Series(params["T2M"]).mean()
-    pluie = pd.Series(params["PRECTOTCORR"]).sum()
-    hum = pd.Series(params["RH2M"]).mean()
-    vent = pd.Series(params["WS2M"]).mean()
-
-    return temp, pluie, hum, vent
+    return (
+        pd.Series(params["T2M"]).mean(),
+        pd.Series(params["PRECTOTCORR"]).sum(),
+        pd.Series(params["RH2M"]).mean(),
+        pd.Series(params["WS2M"]).mean()
+    )
 
 # =========================
 # INTERFACE
 # =========================
-st.markdown("<h1>🌾 Assurance Agricole Paramétrique</h1>", unsafe_allow_html=True)
+st.title("🌾 Assurance Agricole Paramétrique")
 
 col1, col2 = st.columns([1, 2])
 
 with col1:
 
-    st.markdown("### ⚙️ Paramètres")
-
     region = st.selectbox("Région", list(regions.keys()))
     mois = st.selectbox("Mois", list(range(1, 13)), index=4)
 
     culture = st.selectbox("Culture", ["Céréales", "Olives"])
-    irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
+    irrigation = st.radio("Irrigation", ["Oui", "Non"])
 
     superficie = st.number_input("Superficie (Ha)", value=15.0)
     rendement = st.number_input("Rendement (T/Ha)", value=4.0)
 
-    btn = st.button("🚀 Lancer analyse", type="primary")
+    btn = st.button("🚀 Lancer analyse")
 
 with col2:
 
-    try:
-        t, pl, hum, vent = get_nasa_weather(region, mois)
-    except:
-        st.error("Erreur NASA POWER API")
-        st.stop()
+    t, pl, hum, vent = get_nasa_weather(region, mois)
 
     cfg = geo_conf[region]
 
     valeur_ha = 180 if culture == "Céréales" else 300
 
-    st.markdown("## 📊 Données climatiques")
-    st.info("Source : NASA POWER")
-
+    st.subheader("📊 Données climatiques")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Température", f"{t:.1f} °C")
+    c1.metric("Temp", f"{t:.1f} °C")
     c2.metric("Pluie", f"{pl:.1f} mm")
-    c3.metric("Vent", f"{vent:.1f} m/s")
-    c4.metric("Humidité", f"{hum:.1f} %")
+    c3.metric("Vent", f"{vent:.1f}")
+    c4.metric("Humidité", f"{hum:.1f}%")
 
-    # =========================
-    # ANALYSE
-    # =========================
     if btn:
 
-        # 🔥 RISQUE
+        # =========================
+        # RISQUE
+        # =========================
         risque = min(
-            max(
-                (25 * cfg["facteur"]) + (15 if irrigation == "Non" else 0),
-                5
-            ),
+            max((25 * cfg["facteur"]) + (15 if irrigation == "Non" else 0), 5),
             95
         )
 
@@ -154,17 +142,18 @@ with col2:
         prime = capital * (0.02 + 0.015 * risque_norm)
 
         # =========================
-        # INDEMNITÉ (CORRIGÉE PROPRE)
+        # INDICE CLIMATIQUE (CORRIGÉ)
         # =========================
         seuil = cfg["seuil"]
         historique = cfg["historique"]
 
         deficit_seuil = max(0, (seuil - pl) / seuil)
-        stress_historique = max(0, (historique - pl) / historique)
+        deficit_historique = max(0, (historique - pl) / historique)
 
-        indice_climatique = 0.5 * deficit_seuil + 0.5 * stress_historique
+        indice_climatique = 0.6 * deficit_seuil + 0.4 * deficit_historique
 
-        indemn = capital * indice_climatique * (0.4 + 0.6 * risque_norm)
+        # 🔥 IMPORTANT : cohérence avec risque
+        indemn = capital * indice_climatique * (0.3 + 0.7 * risque_norm)
 
         # =========================
         # AFFICHAGE
@@ -172,49 +161,50 @@ with col2:
         st.divider()
 
         c1, c2 = st.columns(2)
-        c1.metric("🔥 Risque", f"{risque:.1f} %")
+        c1.metric("🔥 Risque", f"{risque:.1f}%")
         c2.metric("💳 Prime", f"{prime:.2f} DT")
 
-        st.metric("💰 Capital assuré", f"{capital:.2f} DT")
+        st.metric("💰 Capital", f"{capital:.2f} DT")
 
         st.divider()
 
         if indice_climatique > 0:
-            st.error(f"💰 Indemnité calculée : {indemn:.2f} DT")
+            st.error(f"💰 Indemnité : {indemn:.2f} DT")
         else:
-            st.success("✅ Aucun sinistre déclenché")
+            st.success("✅ Aucun sinistre")
 
         # =========================
         # INTERPRÉTATION
         # =========================
-        st.markdown("## 📌 Interprétation")
+        st.subheader("📌 Interprétation")
 
         st.write(f"""
-- 🌾 Culture : {culture}
-- 💰 Valeur/ha : {valeur_ha} DT
-- 📊 Rendement : {rendement} T/ha
-- 📉 Pluie : {pl:.1f} mm
-- 🎯 Seuil : {seuil} mm
-- 📈 Historique : {historique} mm
+- Culture : {culture}
+- Pluie : {pl:.1f} mm
+- Seuil : {seuil} mm
+- Historique : {historique} mm
+- Risque : {risque:.1f}%
 
-👉 Le capital dépend de la surface et du rendement  
-👉 L’indemnité dépend du déficit de pluie + stress historique + risque climatique
+👉 L’indemnité dépend de 3 facteurs :
+1. Déficit par rapport au seuil
+2. Déficit par rapport à l’historique
+3. Niveau de risque agricole
 """)
 
         # =========================
         # FORMULES
         # =========================
-        with st.expander("ℹ️ Formules du modèle"):
+        with st.expander("ℹ️ Formules"):
 
             st.markdown("""
-### 💰 Capital
+### Capital
 Capital = (Superficie × Valeur/ha) + (Superficie × Rendement × 25)
 
-### 💳 Prime
+### Prime
 Prime = Capital × (0.02 + 0.015 × Risque)
 
-### 💰 Indemnité
-Indemnité = Capital × Indice climatique × (0.4 + 0.6 × Risque)
+### Indemnité
+Indice climatique = 0.6 × déficit seuil + 0.4 × déficit historique  
 
-Indice climatique = 0.5 × Déficit seuil + 0.5 × Stress historique
+Indemnité = Capital × Indice climatique × (0.3 + 0.7 × Risque)
 """)
