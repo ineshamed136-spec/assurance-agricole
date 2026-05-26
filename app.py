@@ -13,7 +13,7 @@ def load_model():
 
 model_rf, model_charge = load_model()
 
-# 2. CONFIGURATION RÉGIONALE
+# 2. CONFIGURATION RÉGIONALE (Ajout de Médenine)
 geo_conf = {
     "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0, "moyenne_20ans": 45.5},
     "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0, "moyenne_20ans": 42.0},
@@ -56,14 +56,13 @@ with col2:
     cfg = geo_conf[region]
     
     st.subheader("📊 Données Climatiques")
-    # URL rendue non-détectable par le remplacement des points par des espaces
-    st.caption("Sources des données : NASA POWER (power larc nasa gov)")
+    st.caption("Sources des données : [NASA POWER](https://power.larc.nasa.gov/)")
     
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
-    m3.metric("Humidité", f"{hum:.1f} %")
-    m4.metric("Vent", f"{vent:.1f} km/h")
+    m3.metric("Seuil Sinistre", f"{cfg['seuil']} mm")
+    m4.metric("Moyenne 20 ans", f"{cfg['moyenne_20ans']} mm")
 
     if btn:
         risque_final = (25.0 * cfg["facteur"]) + (mois * 0.5)
@@ -97,7 +96,7 @@ with col2:
             ### 💳 La Prime (Coût du risque)
             Calculée via : Risque x Coeff + Frais fixes + Part variable.
             
-            * **Source des données :** NASA POWER (power larc nasa gov)
+            * **Source des données :** Les paramètres climatiques sont appuyés par les données du projet [NASA POWER](https://power.larc.nasa.gov/).
             
             ### 💧 Logique de Déclenchement (Trigger)
             * **Référence historique :** Moyenne sur 20 ans pour **{region}** : **{cfg['moyenne_20ans']} mm**.
@@ -105,3 +104,4 @@ with col2:
             """)
             st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
             st.latex(r"Indemnité_{Sinistre} = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{Max}")
+        """)
