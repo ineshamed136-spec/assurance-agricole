@@ -2,10 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 
-st.set_page_config(
-    page_title="Assurance Agricole Paramétrique",
-    layout="wide"
-)
+st.set_page_config(page_title="Assurance Agricole Paramétrique", layout="wide")
 
 # =========================
 # STYLE
@@ -15,7 +12,6 @@ st.markdown("""
 h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
     display: none !important;
 }
-
 [data-testid="stHeaderActionElements"] {
     display: none !important;
 }
@@ -39,7 +35,7 @@ regions = {
 }
 
 # =========================
-# CONFIGURATION
+# CONFIG
 # =========================
 geo_conf = {
     "Tunis": {"facteur": 0.9, "seuil": 30.0, "historique": 45.5},
@@ -47,7 +43,6 @@ geo_conf = {
     "Bizerte": {"facteur": 0.8, "seuil": 35.0, "historique": 55.2},
     "Beja": {"facteur": 0.75, "seuil": 40.0, "historique": 60.8},
     "Sousse": {"facteur": 0.95, "seuil": 28.0, "historique": 38.4},
-    "Monastir": {"facteur": 0.95, "seuil": 28.0, "historique": 37.9},
     "Kairouan": {"facteur": 1.15, "seuil": 22.0, "historique": 25.1},
     "Kebili": {"facteur": 1.4, "seuil": 10.0, "historique": 12.5},
     "Gabes": {"facteur": 1.3, "seuil": 15.0, "historique": 18.2},
@@ -55,11 +50,10 @@ geo_conf = {
 }
 
 # =========================
-# NASA POWER API
+# NASA API
 # =========================
 @st.cache_data(show_spinner=False)
 def get_nasa_weather(region, mois):
-
     lat, lon = regions[region]
     year = 2024
 
@@ -77,17 +71,15 @@ def get_nasa_weather(region, mois):
         f"&format=JSON"
     )
 
-    response = requests.get(url, timeout=30)
-    data = response.json()
-
+    data = requests.get(url).json()
     params = data["properties"]["parameter"]
 
-    temp = pd.Series(params["T2M"]).mean()
-    pluie = pd.Series(params["PRECTOTCORR"]).sum()
-    hum = pd.Series(params["RH2M"]).mean()
-    vent = pd.Series(params["WS2M"]).mean()
-
-    return temp, pluie, hum, vent
+    return (
+        pd.Series(params["T2M"]).mean(),
+        pd.Series(params["PRECTOTCORR"]).sum(),
+        pd.Series(params["RH2M"]).mean(),
+        pd.Series(params["WS2M"]).mean()
+    )
 
 # =========================
 # INTERFACE
@@ -96,116 +88,50 @@ st.title("🌾 Assurance Agricole Paramétrique")
 
 col1, col2 = st.columns([1, 2])
 
-# =========================
-# PARAMÈTRES
-# =========================
 with col1:
+    region = st.selectbox("Région", list(regions.keys()))
+    mois = st.selectbox("Mois", list(range(1, 13)), index=4)
 
-    st.subheader("⚙️ Paramètres")
+    culture = st.selectbox("Culture", ["Céréales", "Olives"])
+    irrigation = st.radio("Irrigation", ["Oui", "Non"])
 
-    region = st.selectbox(
-        "Région",
-        list(regions.keys())
-    )
+    superficie = st.number_input("Superficie (Ha)", value=15.0)
+    rendement = st.number_input("Rendement (T/Ha)", value=4.0)
 
-    mois = st.selectbox(
-        "Mois",
-        list(range(1, 13)),
-        index=4
-    )
+    btn = st.button("🚀 Lancer analyse")
 
-    culture = st.selectbox(
-        "Culture",
-        ["Céréales", "Olives"]
-    )
-
-    irrigation = st.radio(
-        "Irrigation",
-        ["Oui", "Non"]
-    )
-
-    superficie = st.number_input(
-        "Superficie (Ha)",
-        min_value=1.0,
-        value=15.0
-    )
-
-    rendement = st.number_input(
-        "Rendement (T/Ha)",
-        min_value=0.1,
-        value=4.0
-    )
-
-    btn = st.button(
-        "🚀 Lancer analyse",
-        type="primary"
-    )
-
-# =========================
-# RÉSULTATS
-# =========================
 with col2:
 
-    try:
-        t, pl, hum, vent = get_nasa_weather(region, mois)
-
-    except:
-        st.error("Erreur NASA POWER API")
-        st.stop()
-
+    t, pl, hum, vent = get_nasa_weather(region, mois)
     cfg = geo_conf[region]
 
     valeur_ha = 180 if culture == "Céréales" else 300
 
-    # =========================
-    # DONNÉES CLIMATIQUES
-    # =========================
     st.subheader("📊 Données climatiques")
-
     c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Temp", f"{t:.1f} °C")
+    c2.metric("Pluie", f"{pl:.1f} mm")
+    c3.metric("Vent", f"{vent:.1f}")
+    c4.metric("Humidité", f"{hum:.1f}%")
 
-    c1.metric("🌡️ Température", f"{t:.1f} °C")
-    c2.metric("🌧️ Pluie", f"{pl:.1f} mm")
-    c3.metric("💨 Vent", f"{vent:.1f}")
-    c4.metric("💧 Humidité", f"{hum:.1f}%")
-
-    # =========================
-    # ANALYSE
-    # =========================
     if btn:
 
         # =========================
         # RISQUE
         # =========================
-        risque = (
-            (25 * cfg["facteur"])
-            + (15 if irrigation == "Non" else 0)
-        )
-
-        # augmentation si pluie sous historique
-        if pl < cfg["historique"]:
-            risque += 10
-
-        risque = min(max(risque, 5), 95)
-
+        risque = min(max((25 * cfg["facteur"]) + (15 if irrigation == "Non" else 0), 5), 95)
         risque_norm = risque / 100
 
         # =========================
         # CAPITAL
         # =========================
         production = superficie * rendement
-
-        capital = (
-            (superficie * valeur_ha)
-            + (production * 25)
-        )
+        capital = (superficie * valeur_ha) + (production * 25)
 
         # =========================
         # PRIME
         # =========================
-        prime = capital * (
-            0.02 + 0.015 * risque_norm
-        )
+        prime = capital * (0.02 + 0.015 * risque_norm)
 
         # =========================
         # INDICE CLIMATIQUE
@@ -213,72 +139,48 @@ with col2:
         seuil = cfg["seuil"]
         historique = cfg["historique"]
 
-        deficit_seuil = max(
-            0,
-            (seuil - pl) / seuil
-        )
+        deficit_seuil = max(0, (seuil - pl) / seuil)
+        deficit_hist = max(0, (historique - pl) / historique)
 
-        deficit_historique = max(
-            0,
-            (historique - pl) / historique
-        )
-
-        indice_climatique = (
-            0.7 * deficit_seuil
-            + 0.3 * deficit_historique
-        )
+        indice_climatique = 0.7 * deficit_seuil + 0.3 * deficit_hist
 
         # =========================
-        # INDEMNITÉ
+        # 🔥 CONDITION SINISTRE (IMPORTANT FIX)
         # =========================
-        indemn = (
-            capital
-            * indice_climatique
-            * risque_norm
-        )
+        seuil_declenchement = 0.15   # 15% de stress minimum
 
-        # plafond maximum
-        indemn = min(indemn, capital * 0.8)
+        sinistre = indice_climatique >= seuil_declenchement
+
+        # =========================
+        # INDEMNITÉ (BORNEE)
+        # =========================
+        indemn_raw = capital * indice_climatique * (0.3 + 0.7 * risque_norm)
+
+        indemn = min(indemn_raw, capital)
 
         # =========================
         # AFFICHAGE
         # =========================
         st.divider()
 
-        r1, r2 = st.columns(2)
+        c1, c2 = st.columns(2)
+        c1.metric("🔥 Risque", f"{risque:.1f}%")
+        c2.metric("💳 Prime", f"{prime:.2f} DT")
 
-        r1.metric(
-            "🔥 Risque",
-            f"{risque:.1f}%"
-        )
-
-        r2.metric(
-            "💳 Prime",
-            f"{prime:.2f} DT"
-        )
-
-        st.metric(
-            "💰 Capital assuré",
-            f"{capital:.2f} DT"
-        )
+        st.metric("💰 Capital assuré", f"{capital:.2f} DT")
 
         st.divider()
 
         # =========================
-        # SINISTRE
+        # SINISTRE LOGIQUE
         # =========================
-        if indemn > 0:
-            st.error(
-                f"💰 Indemnité estimée : {indemn:.2f} DT"
-            )
-
+        if sinistre:
+            st.error(f"💰 Indemnité estimée : {indemn:.2f} DT")
         else:
-            st.success(
-                "✅ Aucun sinistre déclenché"
-            )
+            st.success("✅ Aucun sinistre déclenché")
 
         # =========================
-        # INTERPRÉTATION
+        # INTERPRÉTATION (COHÉRENTE)
         # =========================
         st.subheader("📌 Interprétation")
 
@@ -289,8 +191,8 @@ with col2:
 - Valeur par hectare : {valeur_ha} DT
 - Capital assuré : {capital:.2f} DT
 
-👉 Le calcul combine les données climatiques
-réelles et les paramètres régionaux de sécheresse.
+👉 Le sinistre est déclenché uniquement si le déficit climatique dépasse 15%
+👉 L’indemnité reste toujours proportionnelle au capital et au stress climatique
 """)
 
         # =========================
@@ -299,15 +201,19 @@ réelles et les paramètres régionaux de sécheresse.
         with st.expander("ℹ️ Formules du modèle"):
 
             st.markdown("""
-### 💰 Capital assuré
-Capital = (Superficie × Valeur/ha) + (Production × 25)
+### Capital
+Capital = (Superficie × Valeur/ha) + (Superficie × Rendement × 25)
 
-### 💳 Prime d’assurance
+### Prime
 Prime = Capital × (0.02 + 0.015 × Risque)
 
-### 🌧️ Indice climatique
-Indice climatique = 0.7 × déficit seuil + 0.3 × déficit historique
+### Indice climatique
+Indice = 0.7 × déficit seuil + 0.3 × déficit historique
 
-### 💰 Indemnité
-Indemnité = Capital × Indice climatique × Risque normalisé
+### Indemnité
+Indemnité brute = Capital × Indice × (0.3 + 0.7 × Risque)
+Indemnité finale = min(Indemnité brute, Capital)
+
+### Condition sinistre
+Sinistre si Indice climatique ≥ 0.15
 """)
