@@ -1,9 +1,8 @@
 import streamlit as st
-import joblib
 import pandas as pd
 import requests
 
-st.set_page_config(page_title="Assurance Agricole", layout="wide")
+st.set_page_config(page_title="Assurance Agricole Paramétrique", layout="wide")
 
 # =========================
 # STYLE
@@ -77,12 +76,12 @@ def get_nasa_weather(region, mois):
     data = requests.get(url, timeout=30).json()
     params = data["properties"]["parameter"]
 
-    return (
-        pd.Series(params["T2M"]).mean(),
-        pd.Series(params["PRECTOTCORR"]).sum(),
-        pd.Series(params["RH2M"]).mean(),
-        pd.Series(params["WS2M"]).mean()
-    )
+    temp = pd.Series(params["T2M"]).mean()
+    pluie = pd.Series(params["PRECTOTCORR"]).sum()
+    humidite = pd.Series(params["RH2M"]).mean()
+    vent = pd.Series(params["WS2M"]).mean()
+
+    return temp, pluie, humidite, vent
 
 # =========================
 # TITRE
@@ -104,7 +103,7 @@ with col1:
     culture = st.selectbox("Culture", ["Céréales", "Olives"])
     irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
 
-    sup = st.number_input("Superficie (Ha)", value=15.0)
+    superficie = st.number_input("Superficie (Ha)", value=15.0)
     rendement = st.number_input("Rendement (T/Ha)", value=4.0)
 
     btn = st.button("🚀 Lancer analyse", type="primary")
@@ -117,7 +116,7 @@ with col2:
     try:
         t, pl, hum, vent = get_nasa_weather(region, mois)
     except:
-        st.error("Erreur NASA POWER")
+        st.error("Erreur NASA POWER API")
         st.stop()
 
     cfg = geo_conf[region]
@@ -125,13 +124,10 @@ with col2:
     # =========================
     # VALEUR PAR HECTARE
     # =========================
-    if culture == "Céréales":
-        valeur_ha = 180
-    else:
-        valeur_ha = 300
+    valeur_ha = 180 if culture == "Céréales" else 300
 
-    st.markdown("## 📊 Données climatiques")
-    st.markdown("Source : NASA POWER")
+    st.markdown("## 📊 Données climatiques (NASA POWER)")
+    st.markdown("Source officielle : https://power.larc.nasa.gov/")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Température", f"{t:.1f} °C")
@@ -158,21 +154,23 @@ with col2:
         # =========================
         # CAPITAL
         # =========================
-        production_totale = sup * rendement
-        capital = (sup * valeur_ha) + (production_totale * 25)
+        production_totale = superficie * rendement
+        capital = (superficie * valeur_ha) + (production_totale * 25)
 
         # =========================
-        # PRIME (corrigée)
+        # PRIME (corrigée simple)
         # =========================
         prime = capital * (0.02 + 0.015 * risque_norm)
 
         # =========================
-        # INDEMNITÉ (paramétrique)
+        # INDEMNITÉ (CORRIGÉE + COHÉRENTE)
         # =========================
         seuil = cfg["seuil"]
-        trigger = max(0, (seuil - pl) / seuil)
 
-        indemn = capital * trigger * (0.2 + 0.8 * risque_norm)
+        pluie_factor = max(0, (seuil - pl) / seuil)
+        risk_factor = 0.3 + 0.7 * risque_norm
+
+        indemn = capital * pluie_factor * risk_factor
 
         # =========================
         # AFFICHAGE
@@ -187,8 +185,11 @@ with col2:
 
         st.divider()
 
+        # =========================
+        # DÉCLENCHEMENT
+        # =========================
         if pl < seuil:
-            st.error(f"💰 Indemnité : {indemn:.2f} DT")
+            st.error(f"💰 Indemnité déclenchée : {indemn:.2f} DT")
         else:
             st.success("✅ Aucun sinistre déclenché")
 
@@ -202,11 +203,12 @@ with col2:
 - 💰 Valeur/ha : {valeur_ha} DT
 - 📊 Rendement : {rendement} T/ha
 - 📉 Pluie : {pl:.1f} mm
-- 🎯 Seuil : {seuil} mm
+- 🎯 Seuil régional : {seuil} mm
 - 📈 Historique : {cfg['historique']} mm
 
-👉 Le capital dépend de la surface, culture et rendement.
-👉 L’indemnité dépend du déficit de pluie + du risque climatique.
+👉 Le capital dépend de la surface + rendement + culture  
+👉 La prime dépend du risque agricole  
+👉 L’indemnité dépend du déficit de pluie ET du risque
 """)
 
         # =========================
@@ -222,5 +224,5 @@ Capital = (Superficie × Valeur/ha) + (Superficie × Rendement × 25)
 Prime = Capital × (0.02 + 0.015 × Risque)
 
 ### 💰 Indemnité
-Indemnité = Capital × max(0, (Seuil - Pluie)/Seuil) × (0.2 + 0.8 × Risque)
+Indemnité = Capital × max(0, (Seuil - Pluie)/Seuil) × (0.3 + 0.7 × Risque)
 """)
