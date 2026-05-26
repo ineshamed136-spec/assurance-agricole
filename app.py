@@ -1,74 +1,205 @@
-# =========================
-# ANALYSE
-# =========================
-if btn:
+import streamlit as st
+import joblib
+import pandas as pd
+import requests
 
-    # 🔥 RISQUE
-    risque_final = min(
-        max(
-            (25.0 * cfg["facteur"])
-            + (mois * 0.5)
-            + (15 if irrigation == "Non" else 0),
-            5.0
-        ),
-        95.0
+st.set_page_config(page_title="Assurance Agricole", layout="wide")
+
+# =========================
+# STYLE
+# =========================
+st.markdown("""
+<style>
+h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
+    display: none !important;
+}
+[data-testid="stHeaderActionElements"] {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# MODÈLE (optionnel)
+# =========================
+@st.cache_resource
+def load_model():
+    try:
+        return joblib.load("model.pkl"), True
+    except:
+        return None, False
+
+model_rf, model_charge = load_model()
+
+# =========================
+# RÉGIONS
+# =========================
+regions = {
+    "Tunis": (36.8065, 10.1815),
+    "Nabeul": (36.4561, 10.7376),
+    "Bizerte": (37.2744, 9.8739),
+    "Beja": (36.7256, 9.1817),
+    "Sousse": (35.8256, 10.6411),
+    "Monastir": (35.7643, 10.8113),
+    "Kairouan": (35.6781, 10.0963),
+    "Gabes": (33.8815, 10.0982),
+    "Kebili": (33.7044, 8.9690),
+    "Médenine": (33.3547, 10.5055)
+}
+
+# =========================
+# CONFIGURATION
+# =========================
+geo_conf = {
+    "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0},
+    "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0},
+    "Bizerte": {"facteur": 0.8, "coeff": 3.5, "seuil": 35.0},
+    "Beja": {"facteur": 0.75, "coeff": 3.0, "seuil": 40.0},
+    "Sousse": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
+    "Monastir": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
+    "Kairouan": {"facteur": 1.15, "coeff": 5.5, "seuil": 22.0},
+    "Kebili": {"facteur": 1.4, "coeff": 7.0, "seuil": 10.0},
+    "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0},
+    "Médenine": {"facteur": 1.5, "coeff": 7.5, "seuil": 8.0}
+}
+
+# =========================
+# NASA POWER API
+# =========================
+@st.cache_data(show_spinner=False)
+def get_nasa_weather(region, mois):
+
+    lat, lon = regions[region]
+    year = 2024
+
+    start = f"{year}{mois:02d}01"
+    end = f"{year}{mois:02d}28"
+
+    url = (
+        "https://power.larc.nasa.gov/api/temporal/daily/point?"
+        f"parameters=T2M,PRECTOTCORR,RH2M,WS2M"
+        f"&community=AG"
+        f"&longitude={lon}"
+        f"&latitude={lat}"
+        f"&start={start}"
+        f"&end={end}"
+        f"&format=JSON"
     )
 
-    risque_norm = risque_final / 100
+    data = requests.get(url, timeout=30).json()
+    params = data["properties"]["parameter"]
 
-    prod_totale = sup * prod
-    cap_max = (sup * 200) + (prod_totale * 25)
+    temp = pd.Series(params["T2M"]).mean()
+    pluie = pd.Series(params["PRECTOTCORR"]).sum()
+    humidite = pd.Series(params["RH2M"]).mean()
+    vent = pd.Series(params["WS2M"]).mean()
+
+    return temp, pluie, humidite, vent
+
+# =========================
+# TITRE
+# =========================
+st.markdown("<h1>🌾 Assurance Agricole Intelligente</h1>", unsafe_allow_html=True)
+
+col1, col2 = st.columns([1, 2])
+
+# =========================
+# INPUTS
+# =========================
+with col1:
+
+    st.markdown("### ⚙️ Paramètres")
+
+    region = st.selectbox("Région", list(regions.keys()))
+    mois = st.selectbox("Mois", list(range(1, 13)), index=4)
+    irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
+
+    sup = st.number_input("Superficie (Ha)", value=15.0, min_value=1.0)
+    prod = st.number_input("Rendement (T/Ha)", value=4.0, min_value=0.1)
+
+    # ✅ bouton correctement placé
+    btn = st.button("🚀 Lancer analyse", type="primary")
+
+# =========================
+# OUTPUT
+# =========================
+with col2:
+
+    try:
+        t, pl, hum, vent = get_nasa_weather(region, mois)
+    except:
+        st.error("Erreur NASA POWER API")
+        st.stop()
+
+    cfg = geo_conf[region]
+
+    st.markdown("## 📊 Données climatiques")
+    st.markdown("Source officielle : https://power.larc.nasa.gov/")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Température", f"{t:.1f} °C")
+    c2.metric("Pluie", f"{pl:.1f} mm")
+    c3.metric("Vent", f"{vent:.1f} m/s")
+    c4.metric("Humidité", f"{hum:.1f} %")
 
     # =========================
-    # 💳 PRIME (FORMULE CORRIGÉE SIMPLE)
+    # ANALYSE
     # =========================
-    prime = cap_max * (0.02 + 0.01 * risque_norm)
+    if btn:
 
-    st.divider()
+        # 🔥 RISQUE
+        risque_final = min(
+            max(
+                (25.0 * cfg["facteur"])
+                + (mois * 0.5)
+                + (15 if irrigation == "Non" else 0),
+                5.0
+            ),
+            95.0
+        )
 
-    a, b = st.columns(2)
-    a.metric("🔥 Risque", f"{risque_final:.1f} %")
-    b.metric("💳 Prime", f"{prime:.2f} DT")
+        risque_norm = risque_final / 100
 
-    st.divider()
+        prod_totale = sup * prod
+        cap_max = (sup * 200) + (prod_totale * 25)
 
-    # =========================
-    # 💰 INDEMNITÉ (PARAMÉTRIQUE CORRIGÉE)
-    # =========================
-    if pl < cfg["seuil"]:
+        # 💳 PRIME (corrigée)
+        prime = cap_max * (0.02 + 0.01 * risque_norm)
 
-        # 🌧️ Trigger climatique (déficit de pluie)
-        trigger = max(0, (cfg["seuil"] - pl) / cfg["seuil"])
+        st.divider()
 
-        # 🔥 indemnité corrélée au risque
-        indemn = cap_max * trigger * (0.5 + 0.5 * risque_norm)
+        a, b = st.columns(2)
+        a.metric("🔥 Risque", f"{risque_final:.1f} %")
+        b.metric("💳 Prime", f"{prime:.2f} DT")
 
-        st.error(f"💰 Indemnité : {indemn:.2f} DT")
+        st.divider()
 
-    else:
-        st.success("✅ Pas de sinistre déclenché")
+        # 💰 INDEMNITÉ (corrélée risque + seuil)
+        if pl < cfg["seuil"]:
 
-    # =========================
-    # 📌 INTERPRÉTATION AMÉLIORÉE
-    # =========================
-    st.markdown("## 📌 Interprétation")
+            trigger = max(0, (cfg["seuil"] - pl) / cfg["seuil"])
 
-    st.markdown(f"""
-- 🌧️ **Seuil de déclenchement : {cfg['seuil']} mm**
-- 📊 Si pluie < seuil → activation automatique du contrat
-- 🔥 Risque actuel : {risque_final:.1f} %
+            indemn = cap_max * trigger * (0.5 + 0.5 * risque_norm)
 
-👉 Le système combine un **indice climatique (pluie)** et un **score de risque ML** pour ajuster les paiements.
-""")
+            st.error(f"💰 Indemnité : {indemn:.2f} DT")
 
-    # =========================
-    # ℹ️ MÉTHODOLOGIE
-    # =========================
-    with st.expander("ℹ️ Modèle et formules"):
+        else:
+            st.success("✅ Pas de sinistre déclenché")
 
-        st.markdown("""
-### ⚙️ Déclenchement du sinistre
-Un sinistre est déclenché lorsque la pluie mensuelle est inférieure au seuil régional.
+        # 📌 INTERPRÉTATION
+        st.markdown("## 📌 Interprétation")
+
+        if pl < cfg["seuil"]:
+            st.write("Sécheresse détectée → indemnisation activée.")
+        else:
+            st.write("Conditions normales.")
+
+        # ℹ️ EXPLICATION
+        with st.expander("ℹ️ Modèle et formules"):
+
+            st.markdown("""
+### ⚙️ Déclenchement
+Sinistre déclenché si pluie < seuil régional.
 
 ### 💳 Prime
 Prime = Capital × (0.02 + 0.01 × Risque)
@@ -76,10 +207,6 @@ Prime = Capital × (0.02 + 0.01 × Risque)
 ### 💰 Indemnité
 Indemnité = Capital × Trigger × (0.5 + 0.5 × Risque)
 
-### 🌧️ Trigger climatique
+### 🌧️ Trigger
 Trigger = max(0, (Seuil - Pluie) / Seuil)
 """)
-
-        st.latex(
-            r"Indemnité = Capital \times \max\left(0, \frac{Seuil - Pluie}{Seuil}\right) \times (0.5 + 0.5 \times Risque)"
-        )
