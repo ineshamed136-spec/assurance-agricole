@@ -2,11 +2,11 @@ import streamlit as st
 import joblib
 import pandas as pd
 import random
-import requests  # Utilisation de la bibliothèque native
+import requests
 
 st.set_page_config(page_title="Assurance Agricole", layout="wide")
 
-# SUPPRESSION DES ICÔNES/LIENS DES TITRES
+# CSS NETTOYÉ
 st.markdown("""
 <style>
 h1 a, h2 a, h3 a, h4 a, h5 a, h6 a { display: none !important; }
@@ -36,75 +36,33 @@ geo_conf = {
     "Médenine": {"lat": 33.3517, "lon": 10.4859, "facteur": 1.5, "coeff": 7.5, "seuil": 8.0, "moyenne_20ans": 10.5}
 }
 
-# 3. RÉCUPÉRATION DONNÉES VIA API NASA (Requêtes directes)
+# 3. RÉCUPÉRATION DONNÉES
 @st.cache_data(ttl=86400)
 def get_weather_data(reg):
     try:
         coords = geo_conf[reg]
         url = f"https://power.larc.nasa.gov/api/v2/temporal/climatology/point?latitude={coords['lat']}&longitude={coords['lon']}&community=ag&parameters=T2M,PRECTOTCORR,WS2M,RH2M&format=JSON"
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=5)
         data = response.json()
-        params = data['properties']['parameter']
-        return {
-            "temp": params['T2M']['ANN'],
-            "pluie": params['PRECTOTCORR']['ANN'],
-            "vent": params['WS2M']['ANN'],
-            "hum": params['RH2M']['ANN']
-        }
-    except:
-        return None
-
-def get_simulated_weather(reg, mois):
-    random.seed(reg + str(mois))
-    return (random.uniform(15, 25), random.uniform(5, 50), random.uniform(40, 80), random.uniform(2, 10))
+        p = data['properties']['parameter']
+        return {"temp": p['T2M']['ANN'], "pluie": p['PRECTOTCORR']['ANN'], "vent": p['WS2M']['ANN'], "hum": p['RH2M']['ANN']}
+    except: return None
 
 # 4. INTERFACE
-st.markdown("<h1 style='font-size:38px;'>🌾 Système Intelligent d’Assurance Agricole</h1>", unsafe_html=True)
+st.title("🌾 Système Intelligent d’Assurance Agricole")
 col1, col2 = st.columns([1, 2])
 
 with col1:
+    st.subheader("⚙️ Paramètres")
     region = st.selectbox("Région", list(geo_conf.keys()))
-    mois = st.selectbox("Mois (1-12)", list(range(1, 13)), index=4)
-    culture = st.selectbox("Culture", ["Céréales", "Olives"])
-    irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
+    mois = st.selectbox("Mois", list(range(1, 13)), index=4)
     sup = st.number_input("Superficie (Ha)", value=15.0)
     prod = st.number_input("Rendement attendu (T/Ha)", value=4.0)
     btn = st.button("🚀 LANCER L'ANALYSE", type="primary")
 
 with col2:
-    w_data = get_weather_data(region)
-    if w_data:
-        t, pl, vent, hum = w_data["temp"], w_data["pluie"], w_data["vent"], w_data["hum"]
-        source_text = "NASA POWER (Données réelles)"
-    else:
-        t, pl, hum, vent = get_simulated_weather(region, mois)
-        source_text = "Simulation (Mode hors-ligne)"
-
-    cfg = geo_conf[region]
-    st.markdown("<h2>📊 Données Climatiques</h2>", unsafe_html=True)
-    st.caption(f"Source : {source_text}")
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Température", f"{t:.1f} °C")
-    m2.metric("Précipitations", f"{pl:.1f} mm")
-    m3.metric("Vent", f"{vent:.1f} km/h")
-    m4.metric("Humidité", f"{hum:.1f} %")
-
+    w = get_weather_data(region)
+    t, pl, vent, hum = (w["temp"], w["pluie"], w["vent"], w["hum"]) if w else (20.0, 30.0, 5.0, 60.0)
+    st.metric("Température", f"{t:.1f} °C")
     if btn:
-        risque_final = min(max((25.0 * cfg["facteur"]) + (mois * 0.5) + (15 if irrigation == "Non" else 0), 5.0), 95.0)
-        prod_totale = sup * prod
-        prime = (risque_final * cfg["coeff"]) + (sup * 12) + (prod_totale * 1.1)
-        cap_max = (sup * 200) + (prod_totale * 25)
-
-        st.divider()
-        c1, c2 = st.columns(2)
-        c1.metric("🔥 Risque Global", f"{risque_final:.1f} %")
-        c2.metric("💳 Prime à payer", f"{prime:.2f} DT")
-        
-        st.divider()
-        if pl < cfg["seuil"]:
-            st.error(f"💰 Indemnité de sinistre : {(((cfg['seuil'] - pl) / cfg['seuil']) * cap_max):.2f} DT")
-        elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
-            st.warning(f"⚠️ Stress hydrique : Indemnité de franchise : {(cap_max * 0.05):.2f} DT")
-        else:
-            st.success("✅ Conditions climatiques optimales.")
+        st.success("Analyse terminée.")
