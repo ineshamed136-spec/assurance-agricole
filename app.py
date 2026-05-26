@@ -69,10 +69,15 @@ with col2:
     cfg = geo_conf[region]
 
     st.markdown("<h2>📊 Données Climatiques</h2>", unsafe_allow_html=True)
-    st.markdown("Sources des données : NASA POWER (power larc nasa gov)")
+    st.markdown("Sources des données : NASA POWER (power.larc.nasa.gov)")
 
-    # 4 colonnes pour vos 4 mesures
+    # Affichage des métriques corrigé (sans rupture de ligne dans les f-strings)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f} °C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
-    m3.metric("Vent", f"{vent:.
+    m3.metric("Vent", f"{vent:.1f} km/h")
+    m4.metric("Humidité", f"{hum:.1f} %")
+
+    if btn:
+        # Logique de calcul
+        risque_final = min(max((25.0 * cfg["facteur"]) + (mois * 0.5) + (15 if irrigation
