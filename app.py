@@ -20,7 +20,7 @@ h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
 """, unsafe_allow_html=True)
 
 # =========================
-# CHARGEMENT MODÈLE
+# MODÈLE (optionnel)
 # =========================
 @st.cache_resource
 def load_model():
@@ -32,7 +32,7 @@ def load_model():
 model_rf, model_charge = load_model()
 
 # =========================
-# RÉGIONS (coordonnées)
+# RÉGIONS
 # =========================
 regions = {
     "Tunis": (36.8065, 10.1815),
@@ -48,23 +48,23 @@ regions = {
 }
 
 # =========================
-# CONFIGURATION RÉGIONALE
+# CONFIGURATION
 # =========================
 geo_conf = {
-    "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0, "moyenne_20ans": 45.5},
-    "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0, "moyenne_20ans": 42.0},
-    "Bizerte": {"facteur": 0.8, "coeff": 3.5, "seuil": 35.0, "moyenne_20ans": 55.2},
-    "Beja": {"facteur": 0.75, "coeff": 3.0, "seuil": 40.0, "moyenne_20ans": 60.8},
-    "Sousse": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0, "moyenne_20ans": 38.4},
-    "Monastir": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0, "moyenne_20ans": 37.9},
-    "Kairouan": {"facteur": 1.15, "coeff": 5.5, "seuil": 22.0, "moyenne_20ans": 25.1},
-    "Kebili": {"facteur": 1.4, "coeff": 7.0, "seuil": 10.0, "moyenne_20ans": 12.5},
-    "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0, "moyenne_20ans": 18.2},
-    "Médenine": {"facteur": 1.5, "coeff": 7.5, "seuil": 8.0, "moyenne_20ans": 10.5}
+    "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0},
+    "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0},
+    "Bizerte": {"facteur": 0.8, "coeff": 3.5, "seuil": 35.0},
+    "Beja": {"facteur": 0.75, "coeff": 3.0, "seuil": 40.0},
+    "Sousse": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
+    "Monastir": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0},
+    "Kairouan": {"facteur": 1.15, "coeff": 5.5, "seuil": 22.0},
+    "Kebili": {"facteur": 1.4, "coeff": 7.0, "seuil": 10.0},
+    "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0},
+    "Médenine": {"facteur": 1.5, "coeff": 7.5, "seuil": 8.0}
 }
 
 # =========================
-# NASA POWER API
+# NASA POWER
 # =========================
 @st.cache_data(show_spinner=False)
 def get_nasa_weather(region, mois):
@@ -97,14 +97,14 @@ def get_nasa_weather(region, mois):
     return temp, pluie, humidite, vent
 
 # =========================
-# INTERFACE
+# TITRE
 # =========================
-st.markdown("<h1>🌾 Système Intelligent d’Assurance Agricole</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🌾 Assurance Agricole Intelligente</h1>", unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 2])
 
 # =========================
-# INPUTS
+# INPUT
 # =========================
 with col1:
 
@@ -112,13 +112,12 @@ with col1:
 
     region = st.selectbox("Région", list(regions.keys()))
     mois = st.selectbox("Mois", list(range(1, 13)), index=4)
-    culture = st.selectbox("Culture", ["Céréales", "Olives"])
     irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
 
     sup = st.number_input("Superficie (Ha)", value=15.0, min_value=1.0)
     prod = st.number_input("Rendement (T/Ha)", value=4.0, min_value=0.1)
 
-    btn = st.button("🚀 Analyser", type="primary")
+    btn = st.button("🚀 Lancer analyse", type="primary")
 
 # =========================
 # OUTPUT
@@ -128,12 +127,13 @@ with col2:
     try:
         t, pl, hum, vent = get_nasa_weather(region, mois)
     except:
-        st.error("Erreur NASA POWER")
+        st.error("Erreur NASA POWER API")
         st.stop()
 
     cfg = geo_conf[region]
 
-    st.markdown("### 📊 Données NASA POWER")
+    st.markdown("## 📊 Données climatiques (NASA POWER)")
+    st.info("Source officielle : https://power.larc.nasa.gov/")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Température", f"{t:.1f} °C")
@@ -173,45 +173,57 @@ with col2:
 
         st.divider()
 
-        colA, colB = st.columns(2)
-        colA.metric("🔥 Risque", f"{risque_final:.1f} %")
-        colB.metric("💳 Prime", f"{prime:.2f} DT")
+        a, b = st.columns(2)
+        a.metric("🔥 Risque", f"{risque_final:.1f} %")
+        b.metric("💳 Prime", f"{prime:.2f} DT")
 
         st.divider()
 
         # =========================
-        # INDEMNITÉ (corrélée risque)
+        # INDEMNITÉ
         # =========================
         if pl < cfg["seuil"]:
 
             deficit = (cfg["seuil"] - pl) / cfg["seuil"]
-
             alpha = 0.8
 
             indemn = cap_max * deficit * (1 + alpha * risque_norm)
 
             st.error(f"💰 Indemnité : {indemn:.2f} DT")
 
-        elif cfg["seuil"] <= pl < (cfg["seuil"] + 10):
-
-            st.warning(f"⚠️ Stress hydrique")
-
         else:
-            st.success("✅ Conditions normales")
+            st.success("✅ Pas de sinistre déclenché")
 
         # =========================
         # INTERPRÉTATION
         # =========================
-        st.markdown("### 📌 Interprétation")
+        st.markdown("## 📌 Interprétation")
 
         if pl < cfg["seuil"]:
-            st.write("Sécheresse détectée → risque élevé.")
+            st.write("Sécheresse détectée → indemnisation activée.")
         else:
-            st.write("Conditions normales ou acceptables.")
+            st.write("Conditions normales.")
 
         # =========================
-        # NASA POWER SOURCE
+        # EXPLICATION MODÈLE
         # =========================
-        st.markdown("### 🌍 Source des données")
+        with st.expander("ℹ️ Modèle et formules"):
 
-        st.write("NASA POWER API : https://power.larc.nasa.gov/docs/services/api/")
+            st.markdown("""
+### ⚙️ Déclenchement
+L’indemnité est déclenchée si la pluie est inférieure au seuil régional.
+
+### 💳 Prime
+Prime = (β × Risque) + (Superficie × 12) + (Production × 1.1)
+
+### 💰 Indemnité
+Indemnité = Capital × Déficit climatique × (1 + α × Risque)
+
+### 🌍 Données
+NASA POWER (NASA Langley Research Center)
+https://power.larc.nasa.gov/
+""")
+
+            st.latex(
+                r"Indemnité = Capital \times \frac{Seuil - Pluie}{Seuil} \times (1 + \alpha \times Risque)"
+            )
