@@ -64,7 +64,7 @@ geo_conf = {
 }
 
 # =========================
-# NASA POWER
+# NASA POWER API
 # =========================
 @st.cache_data(show_spinner=False)
 def get_nasa_weather(region, mois):
@@ -97,12 +97,15 @@ def get_nasa_weather(region, mois):
     return temp, pluie, humidite, vent
 
 # =========================
-# UI
+# TITRE
 # =========================
 st.markdown("<h1>🌾 Assurance Agricole Intelligente</h1>", unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 2])
 
+# =========================
+# INPUTS
+# =========================
 with col1:
 
     st.markdown("### ⚙️ Paramètres")
@@ -116,6 +119,9 @@ with col1:
 
     btn = st.button("🚀 Lancer analyse", type="primary")
 
+# =========================
+# OUTPUT
+# =========================
 with col2:
 
     try:
@@ -156,7 +162,7 @@ with col2:
         prod_totale = sup * prod
         cap_max = (sup * 200) + (prod_totale * 25)
 
-        # 💳 PRIME (simple et stable)
+        # 💳 PRIME
         prime = cap_max * (0.02 + 0.01 * risque_norm)
 
         st.divider()
@@ -167,18 +173,14 @@ with col2:
 
         st.divider()
 
-        # =========================
         # 💰 INDEMNITÉ
-        # =========================
         seuil_actuel = cfg["seuil"]
         seuil_historique = cfg["historique"]
 
         if pl < seuil_actuel:
 
-            # trigger climatique
             trigger = max(0, (seuil_actuel - pl) / seuil_actuel)
 
-            # indemnité corrélée risque
             indemn = cap_max * trigger * (0.5 + 0.5 * risque_norm)
 
             st.error(f"💰 Indemnité : {indemn:.2f} DT")
@@ -187,7 +189,7 @@ with col2:
             st.success("✅ Pas de sinistre déclenché")
 
         # =========================
-        # 📌 INTERPRÉTATION
+        # INTERPRÉTATION
         # =========================
         st.markdown("## 📌 Interprétation")
 
@@ -198,18 +200,9 @@ with col2:
 - 🎯 Seuil actuel : **{seuil_actuel} mm**
 - 📊 Moyenne historique : **{seuil_historique} mm**
 
-👉 L’indemnité est déclenchée lorsque la pluie est **inférieure au seuil actuel**, qui représente le niveau critique de stress hydrique.
+👉 L’indemnité est déclenchée lorsque la pluie est **inférieure au seuil actuel**, qui représente un niveau critique de stress hydrique agricole.
 
-👉 Le seuil historique sert de **référence climatique long terme** pour comprendre si la saison est anormalement sèche.
-
----
-
-### ⚠️ Pourquoi l’indemnité est déclenchée ?
-
-Parce que :
-- la pluie est insuffisante par rapport au seuil critique
-- cela indique un stress hydrique agricole
-- le contrat paramétrique s’active automatiquement
+👉 Le seuil historique sert de référence climatique sur le long terme pour analyser la normalité de la saison.
 """)
 
         # =========================
@@ -228,6 +221,6 @@ Indemnité = Capital × Trigger × (0.5 + 0.5 × Risque)
 Trigger = max(0, (Seuil - Pluie) / Seuil)
 
 ### 📌 Seuil
-- Seuil actuel = niveau critique de déclenchement
-- Seuil historique = référence climatique longue période
+- Seuil actuel : niveau critique de déclenchement
+- Seuil historique : moyenne climatique de référence
 """)
