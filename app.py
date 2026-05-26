@@ -13,7 +13,7 @@ def load_model():
 
 model_rf, model_charge = load_model()
 
-# 2. CONFIGURATION RÉGIONALE (Moyenne sur 20 ans incluse)
+# 2. CONFIGURATION RÉGIONALE (Ajout de Médenine)
 geo_conf = {
     "Tunis": {"facteur": 0.9, "coeff": 4.0, "seuil": 30.0, "moyenne_20ans": 45.5},
     "Nabeul": {"facteur": 0.85, "coeff": 4.5, "seuil": 32.0, "moyenne_20ans": 42.0},
@@ -23,7 +23,8 @@ geo_conf = {
     "Monastir": {"facteur": 0.95, "coeff": 4.2, "seuil": 28.0, "moyenne_20ans": 37.9},
     "Kairouan": {"facteur": 1.15, "coeff": 5.5, "seuil": 22.0, "moyenne_20ans": 25.1},
     "Kebili": {"facteur": 1.4, "coeff": 7.0, "seuil": 10.0, "moyenne_20ans": 12.5},
-    "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0, "moyenne_20ans": 18.2}
+    "Gabes": {"facteur": 1.3, "coeff": 6.5, "seuil": 15.0, "moyenne_20ans": 18.2},
+    "Médenine": {"facteur": 1.5, "coeff": 7.5, "seuil": 8.0, "moyenne_20ans": 10.5}
 }
 
 # 3. GÉNÉRATEUR DE DONNÉES STABILISÉ
@@ -53,7 +54,10 @@ with col1:
 with col2:
     t, pl, hum, vent = get_local_weather(region, mois)
     cfg = geo_conf[region]
+    
     st.subheader("📊 Données Climatiques")
+    st.caption("Sources des données : [NASA POWER](https://power.larc.nasa.gov/)")
+    
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Température", f"{t:.1f}°C")
     m2.metric("Précipitations", f"{pl:.1f} mm")
@@ -90,13 +94,13 @@ with col2:
             Représente la valeur totale assurée : `(Sup * 200 DT/Ha) + (Prod * 25 DT/T)`.
             
             ### 💳 La Prime (Coût du risque)
-            Calculée via : *Risque x Coeff + Frais fixes + Part variable*.
+            Calculée via : Risque x Coeff + Frais fixes + Part variable.
+            
+            * **Source des données :** Les paramètres climatiques sont appuyés par les données du projet [NASA POWER](https://power.larc.nasa.gov/).
             
             ### 💧 Logique de Déclenchement (Trigger)
             * **Référence historique :** Moyenne sur 20 ans pour **{region}** : **{cfg['moyenne_20ans']} mm**.
             * **Seuil de déclenchement :** **{cfg['seuil']} mm**.
-            * **Sinistre Total :** Si pluie < {cfg['seuil']} mm.
-            * **Stress Hydrique :** Si pluie entre {cfg['seuil']} et {cfg['seuil'] + 10} mm (Indemnité : 5% du Capital Max).
             """)
             st.latex(r"Prime = (Risque \times Coeff_{Régional}) + (Sup \times 12) + (Prod_{Totale} \times 1.1)")
             st.latex(r"Indemnité_{Sinistre} = \left( \frac{Seuil - Pluie}{Seuil} \right) \times Capital_{Max}")
