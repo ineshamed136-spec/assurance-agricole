@@ -51,7 +51,7 @@ geo_conf = {
 }
 
 # =========================
-# NASA POWER
+# NASA POWER API
 # =========================
 @st.cache_data(show_spinner=False)
 def get_nasa_weather(region, mois):
@@ -113,10 +113,10 @@ with col2:
 
     st.subheader("📊 Données climatiques")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Temp", f"{t:.1f} °C")
+    c1.metric("Température", f"{t:.1f} °C")
     c2.metric("Pluie", f"{pl:.1f} mm")
-    c3.metric("Vent", f"{vent:.1f}")
-    c4.metric("Humidité", f"{hum:.1f}%")
+    c3.metric("Vent", f"{vent:.1f} m/s")
+    c4.metric("Humidité", f"{hum:.1f} %")
 
     if btn:
 
@@ -127,7 +127,6 @@ with col2:
             max((25 * cfg["facteur"]) + (15 if irrigation == "Non" else 0), 5),
             95
         )
-
         risque_norm = risque / 100
 
         # =========================
@@ -142,18 +141,20 @@ with col2:
         prime = capital * (0.02 + 0.015 * risque_norm)
 
         # =========================
-        # INDICE CLIMATIQUE (CORRIGÉ)
+        # INDICE CLIMATIQUE
         # =========================
         seuil = cfg["seuil"]
         historique = cfg["historique"]
 
         deficit_seuil = max(0, (seuil - pl) / seuil)
-        deficit_historique = max(0, (historique - pl) / historique)
+        deficit_hist = max(0, (historique - pl) / historique)
 
-        indice_climatique = 0.6 * deficit_seuil + 0.4 * deficit_historique
+        indice = 0.6 * deficit_seuil + 0.4 * deficit_hist
 
-        # 🔥 IMPORTANT : cohérence avec risque
-        indemn = capital * indice_climatique * (0.3 + 0.7 * risque_norm)
+        # =========================
+        # INDEMNITÉ
+        # =========================
+        indemn = capital * indice * (0.3 + 0.7 * risque_norm)
 
         # =========================
         # AFFICHAGE
@@ -164,47 +165,28 @@ with col2:
         c1.metric("🔥 Risque", f"{risque:.1f}%")
         c2.metric("💳 Prime", f"{prime:.2f} DT")
 
-        st.metric("💰 Capital", f"{capital:.2f} DT")
+        st.metric("💰 Capital assuré", f"{capital:.2f} DT")
 
         st.divider()
 
-        if indice_climatique > 0:
+        if indice > 0:
             st.error(f"💰 Indemnité : {indemn:.2f} DT")
         else:
-            st.success("✅ Aucun sinistre")
+            st.success("✅ Aucun sinistre déclenché")
 
         # =========================
-        # INTERPRÉTATION
+        # INTERPRÉTATION (CORRIGÉE)
         # =========================
         st.subheader("📌 Interprétation")
 
         st.write(f"""
-- Culture : {culture}
-- Pluie : {pl:.1f} mm
-- Seuil : {seuil} mm
-- Historique : {historique} mm
-- Risque : {risque:.1f}%
+- 🌧️ Pluie observée : {pl:.1f} mm
+- 🎯 Seuil de déclenchement : {seuil} mm
+- 📊 Moyenne historique : {historique} mm
 
-👉 L’indemnité dépend de 3 facteurs :
-1. Déficit par rapport au seuil
-2. Déficit par rapport à l’historique
-3. Niveau de risque agricole
-""")
+- 💰 Valeur par hectare : {valeur_ha} DT/ha
+- 🏦 Capital assuré : {capital:.2f} DT
 
-        # =========================
-        # FORMULES
-        # =========================
-        with st.expander("ℹ️ Formules"):
-
-            st.markdown("""
-### Capital
-Capital = (Superficie × Valeur/ha) + (Superficie × Rendement × 25)
-
-### Prime
-Prime = Capital × (0.02 + 0.015 × Risque)
-
-### Indemnité
-Indice climatique = 0.6 × déficit seuil + 0.4 × déficit historique  
-
-Indemnité = Capital × Indice climatique × (0.3 + 0.7 × Risque)
+👉 Le capital représente la valeur totale de l’exploitation agricole.
+👉 L’indemnité dépend uniquement du déficit climatique (seuil + historique) et du risque.
 """)
