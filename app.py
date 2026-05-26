@@ -20,8 +20,10 @@ h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
     display: none !important;
 }
 
-.block-container {
-    padding-top: 2rem;
+.metric-box {
+    padding: 10px;
+    border-radius: 10px;
+    background-color: #f7f7f7;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -43,7 +45,7 @@ regions = {
 }
 
 # =========================
-# CONFIGURATION RÉGIONALE
+# CONFIGURATION
 # =========================
 geo_conf = {
     "Tunis": {"facteur": 0.9, "seuil": 30.0, "historique": 45.5},
@@ -88,15 +90,10 @@ def get_nasa_weather(region, mois):
 
     temp = pd.Series(params["T2M"]).mean()
     pluie = pd.Series(params["PRECTOTCORR"]).sum()
-    humidite = pd.Series(params["RH2M"]).mean()
+    hum = pd.Series(params["RH2M"]).mean()
     vent = pd.Series(params["WS2M"]).mean()
 
-    return (
-        round(temp, 1),
-        round(pluie, 1),
-        round(humidite, 1),
-        round(vent, 1)
-    )
+    return temp, pluie, hum, vent
 
 # =========================
 # INTERFACE
@@ -106,7 +103,7 @@ st.title("🌾 Assurance Agricole Paramétrique")
 col1, col2 = st.columns([1, 2])
 
 # =========================
-# PARAMÈTRES
+# COLONNE PARAMÈTRES
 # =========================
 with col1:
 
@@ -151,7 +148,7 @@ with col1:
     )
 
 # =========================
-# RÉSULTATS
+# COLONNE RÉSULTATS
 # =========================
 with col2:
 
@@ -159,7 +156,7 @@ with col2:
         t, pl, hum, vent = get_nasa_weather(region, mois)
 
     except:
-        st.error("Erreur NASA POWER API")
+        st.error("Erreur lors de la récupération des données NASA POWER.")
         st.stop()
 
     cfg = geo_conf[region]
@@ -173,10 +170,10 @@ with col2:
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("🌡️ Température", f"{t} °C")
-    c2.metric("🌧️ Pluie", f"{pl} mm")
-    c3.metric("💨 Vent", f"{vent}")
-    c4.metric("💧 Humidité", f"{hum}%")
+    c1.metric("🌡️ Température", f"{t:.1f} °C")
+    c2.metric("🌧️ Pluie", f"{pl:.1f} mm")
+    c3.metric("💨 Vent", f"{vent:.1f}")
+    c4.metric("💧 Humidité", f"{hum:.1f}%")
 
     # =========================
     # ANALYSE
@@ -188,9 +185,10 @@ with col2:
         # =========================
         risque = (
             (25 * cfg["facteur"])
-            + (12 if irrigation == "Non" else 0)
+            + (15 if irrigation == "Non" else 0)
         )
 
+        # Bonus si pluie sous historique
         if pl < cfg["historique"]:
             risque += 10
 
@@ -212,7 +210,7 @@ with col2:
         # PRIME
         # =========================
         prime = capital * (
-            0.02 + (0.015 * risque_norm)
+            0.025 + (0.03 * risque_norm)
         )
 
         # =========================
@@ -237,31 +235,33 @@ with col2:
         )
 
         # =========================
-        # INDEMNITÉ
+        # INDEMNITÉ COHÉRENTE
         # =========================
-        indemn = (
+        # Minimum d'indemnité si risque élevé
+        indemn_min = capital * risque_norm * 0.08
+
+        # Indemnité climatique
+        indemn_climatique = (
             capital
             * indice_climatique
-            * (0.4 + 0.6 * risque_norm)
+            * (0.5 + risque_norm)
         )
 
-        # =========================
-        # MICRO-INDEMNITÉ
-        # =========================
-        if indemn == 0 and risque >= 35:
+        # On prend la plus grande valeur
+        indemn = max(
+            indemn_min,
+            indemn_climatique
+        )
 
-            indemn = (
-                capital
-                * 0.015
-                * risque_norm
-            )
+        # Limite maximale
+        indemn = min(indemn, capital * 0.8)
 
         # =========================
         # AFFICHAGE
         # =========================
         st.divider()
 
-        r1, r2, r3 = st.columns(3)
+        r1, r2 = st.columns(2)
 
         r1.metric(
             "🔥 Risque",
@@ -273,27 +273,23 @@ with col2:
             f"{prime:.2f} DT"
         )
 
-        r3.metric(
-            "💰 Capital",
+        st.metric(
+            "💰 Capital assuré",
             f"{capital:.2f} DT"
         )
 
         st.divider()
 
         # =========================
-        # RÉSULTAT
+        # LOGIQUE SINISTRE
         # =========================
-        if indemn > 0:
-
-            st.error(
+        if risque >= 30:
+            st.warning(
                 f"💰 Indemnité estimée : {indemn:.2f} DT"
             )
 
         else:
-
-            st.success(
-                "✅ Conditions climatiques favorables"
-            )
+            st.success("✅ Risque faible")
 
         # =========================
         # INTERPRÉTATION
@@ -303,9 +299,13 @@ with col2:
         st.write(f"""
 - Pluie observée : {pl:.1f} mm
 - Seuil régional : {seuil} mm
-- Historique régional : {historique} mm
+- Historique climatique : {historique} mm
 - Valeur par hectare : {valeur_ha} DT
 - Capital assuré : {capital:.2f} DT
+
+👉 Le calcul combine les données climatiques réelles,
+le niveau de risque régional et les caractéristiques
+de l’exploitation agricole.
 """)
 
         # =========================
@@ -315,30 +315,17 @@ with col2:
 
             st.markdown("""
 ### 💰 Capital assuré
+Capital = (Superficie × Valeur/ha) + (Production × 25)
 
-Capital = (Superficie × Valeur/ha)
-+ (Superficie × Rendement × 25)
+### 💳 Prime d’assurance
+Prime = Capital × (0.025 + 0.03 × Risque)
 
-### 💳 Prime
+### 🌧️ Indice climatique
+Indice climatique = 0.7 × déficit seuil + 0.3 × déficit historique
 
-Prime = Capital × (0.02 + 0.015 × Risque)
-
-### 💰 Indemnité climatique
-
-Déficit seuil = max(0, (Seuil - Pluie) / Seuil)
-
-Déficit historique = max(0, (Historique - Pluie) / Historique)
-
-Indice climatique =
-0.7 × Déficit seuil
-+ 0.3 × Déficit historique
-
-Indemnité =
-Capital × Indice climatique × (0.4 + 0.6 × Risque)
-
-### 📌 Compensation partielle
-
-Une compensation minimale peut être appliquée
-même en absence de sécheresse sévère
-si le risque agricole reste élevé.
+### 💰 Indemnité
+Indemnité = max(
+Indemnité minimale liée au risque,
+Indemnité climatique
+)
 """)
