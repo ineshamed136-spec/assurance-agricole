@@ -12,7 +12,6 @@ st.set_page_config(
 # =========================
 st.markdown("""
 <style>
-
 h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
     display: none !important;
 }
@@ -24,7 +23,6 @@ h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
 .block-container {
     padding-top: 2rem;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -45,69 +43,19 @@ regions = {
 }
 
 # =========================
-# CONFIGURATION CLIMATIQUE
+# CONFIGURATION RÉGIONALE
 # =========================
 geo_conf = {
-
-    "Tunis": {
-        "facteur": 0.9,
-        "seuil": 30.0,
-        "historique": 45.5
-    },
-
-    "Nabeul": {
-        "facteur": 0.85,
-        "seuil": 32.0,
-        "historique": 42.0
-    },
-
-    "Bizerte": {
-        "facteur": 0.8,
-        "seuil": 35.0,
-        "historique": 55.2
-    },
-
-    "Beja": {
-        "facteur": 0.75,
-        "seuil": 40.0,
-        "historique": 60.8
-    },
-
-    "Sousse": {
-        "facteur": 0.95,
-        "seuil": 28.0,
-        "historique": 38.4
-    },
-
-    "Monastir": {
-        "facteur": 0.95,
-        "seuil": 28.0,
-        "historique": 37.9
-    },
-
-    "Kairouan": {
-        "facteur": 1.15,
-        "seuil": 22.0,
-        "historique": 25.1
-    },
-
-    "Gabes": {
-        "facteur": 1.3,
-        "seuil": 15.0,
-        "historique": 18.2
-    },
-
-    "Kebili": {
-        "facteur": 1.4,
-        "seuil": 10.0,
-        "historique": 12.5
-    },
-
-    "Médenine": {
-        "facteur": 1.5,
-        "seuil": 8.0,
-        "historique": 10.5
-    }
+    "Tunis": {"facteur": 0.9, "seuil": 30.0, "historique": 45.5},
+    "Nabeul": {"facteur": 0.85, "seuil": 32.0, "historique": 42.0},
+    "Bizerte": {"facteur": 0.8, "seuil": 35.0, "historique": 55.2},
+    "Beja": {"facteur": 0.75, "seuil": 40.0, "historique": 60.8},
+    "Sousse": {"facteur": 0.95, "seuil": 28.0, "historique": 38.4},
+    "Monastir": {"facteur": 0.95, "seuil": 28.0, "historique": 37.9},
+    "Kairouan": {"facteur": 1.15, "seuil": 22.0, "historique": 25.1},
+    "Gabes": {"facteur": 1.3, "seuil": 15.0, "historique": 18.2},
+    "Kebili": {"facteur": 1.4, "seuil": 10.0, "historique": 12.5},
+    "Médenine": {"facteur": 1.5, "seuil": 8.0, "historique": 10.5}
 }
 
 # =========================
@@ -138,20 +86,20 @@ def get_nasa_weather(region, mois):
 
     params = data["properties"]["parameter"]
 
-    temperature = pd.Series(params["T2M"]).mean()
+    temp = pd.Series(params["T2M"]).mean()
     pluie = pd.Series(params["PRECTOTCORR"]).sum()
     humidite = pd.Series(params["RH2M"]).mean()
     vent = pd.Series(params["WS2M"]).mean()
 
     return (
-        round(temperature, 1),
+        round(temp, 1),
         round(pluie, 1),
         round(humidite, 1),
         round(vent, 1)
     )
 
 # =========================
-# TITRE
+# INTERFACE
 # =========================
 st.title("🌾 Assurance Agricole Paramétrique")
 
@@ -182,8 +130,7 @@ with col1:
 
     irrigation = st.radio(
         "Irrigation",
-        ["Oui", "Non"],
-        horizontal=True
+        ["Oui", "Non"]
     )
 
     superficie = st.number_input(
@@ -204,7 +151,7 @@ with col1:
     )
 
 # =========================
-# ANALYSE
+# RÉSULTATS
 # =========================
 with col2:
 
@@ -212,18 +159,18 @@ with col2:
         t, pl, hum, vent = get_nasa_weather(region, mois)
 
     except:
-        st.error("Erreur lors de la récupération des données NASA POWER")
+        st.error("Erreur NASA POWER API")
         st.stop()
 
     cfg = geo_conf[region]
 
     # =========================
-    # VALEUR PAR HECTARE
+    # VALEUR CULTURE
     # =========================
     valeur_ha = 180 if culture == "Céréales" else 300
 
     # =========================
-    # AFFICHAGE MÉTÉO
+    # DONNÉES CLIMATIQUES
     # =========================
     st.subheader("📊 Données climatiques")
 
@@ -235,42 +182,21 @@ with col2:
     c4.metric("💧 Humidité", f"{hum}%")
 
     # =========================
-    # CALCULS
+    # ANALYSE
     # =========================
     if btn:
 
-        seuil = cfg["seuil"]
-        historique = cfg["historique"]
-
         # =========================
-        # DÉFICITS CLIMATIQUES
-        # =========================
-        deficit_seuil = max(
-            0,
-            (seuil - pl) / seuil
-        )
-
-        deficit_historique = max(
-            0,
-            (historique - pl) / historique
-        )
-
-        # =========================
-        # STRESS CLIMATIQUE
-        # =========================
-        stress_climatique = (
-            0.6 * deficit_seuil
-            + 0.4 * deficit_historique
-        )
-
-        # =========================
-        # RISQUE COHÉRENT
+        # RISQUE
         # =========================
         risque = (
-            (15 * cfg["facteur"])
-            + (stress_climatique * 60)
+            (25 * cfg["facteur"])
             + (12 if irrigation == "Non" else 0)
         )
+
+        # augmentation si pluie faible
+        if pl < cfg["historique"]:
+            risque += 10
 
         risque = min(max(risque, 5), 95)
 
@@ -294,20 +220,55 @@ with col2:
         )
 
         # =========================
-        # INDEMNITÉ
+        # INDICE CLIMATIQUE
+        # =========================
+        seuil = cfg["seuil"]
+        historique = cfg["historique"]
+
+        deficit_seuil = max(
+            0,
+            (seuil - pl) / seuil
+        )
+
+        deficit_historique = max(
+            0,
+            (historique - pl) / historique
+        )
+
+        indice_climatique = (
+            0.7 * deficit_seuil
+            + 0.3 * deficit_historique
+        )
+
+        # =========================
+        # INDEMNITÉ PRINCIPALE
         # =========================
         indemn = (
             capital
-            * stress_climatique
+            * indice_climatique
             * (0.4 + 0.6 * risque_norm)
         )
 
         # =========================
-        # AFFICHAGE RÉSULTATS
+        # MICRO-INDEMNITÉ
+        # =========================
+        # cohérence :
+        # risque élevé => compensation minimale
+
+        if indemn == 0 and risque >= 35:
+
+            indemn = (
+                capital
+                * 0.015
+                * risque_norm
+            )
+
+        # =========================
+        # AFFICHAGE
         # =========================
         st.divider()
 
-        r1, r2 = st.columns(2)
+        r1, r2, r3 = st.columns(3)
 
         r1.metric(
             "🔥 Risque",
@@ -319,26 +280,33 @@ with col2:
             f"{prime:.2f} DT"
         )
 
-        st.metric(
-            "💰 Capital assuré",
+        r3.metric(
+            "💰 Capital",
             f"{capital:.2f} DT"
         )
 
         st.divider()
 
         # =========================
-        # DÉCISION SINISTRE
+        # RÉSULTAT
         # =========================
-        if stress_climatique > 0:
+        if indemn > 0:
 
             st.error(
-                f"💰 Indemnité : {indemn:.2f} DT"
+                f"💰 Indemnité estimée : {indemn:.2f} DT"
             )
+
+            if pl >= seuil:
+
+                st.info(
+                    "📌 Risque agricole détecté : "
+                    "une compensation partielle est appliquée."
+                )
 
         else:
 
             st.success(
-                "✅ Aucun sinistre déclenché"
+                "✅ Conditions climatiques favorables"
             )
 
         # =========================
@@ -353,11 +321,9 @@ with col2:
 - Valeur par hectare : {valeur_ha} DT
 - Capital assuré : {capital:.2f} DT
 
-👉 Le risque augmente lorsque les précipitations deviennent
-inférieures aux normales climatiques régionales.
-
-👉 L’indemnité est déclenchée uniquement en présence
-d’un déficit climatique réel.
+👉 L’indemnité dépend du déficit climatique,
+du niveau de risque agricole
+et des caractéristiques du contrat.
 """)
 
         # =========================
@@ -367,19 +333,30 @@ d’un déficit climatique réel.
 
             st.markdown("""
 ### 💰 Capital assuré
-Capital = (Superficie × Valeur/ha)
-+ (Production × 25)
 
-### 💳 Prime d’assurance
+Capital = (Superficie × Valeur/ha)
++ (Superficie × Rendement × 25)
+
+### 💳 Prime
+
 Prime = Capital × (0.02 + 0.015 × Risque)
 
-### 🌧️ Stress climatique
-Stress climatique =
-0.6 × déficit seuil
-+ 0.4 × déficit historique
+### 💰 Indemnité climatique
 
-### 💰 Indemnité
+Déficit seuil = max(0, (Seuil - Pluie) / Seuil)
+
+Déficit historique = max(0, (Historique - Pluie) / Historique)
+
+Indice climatique =
+0.7 × Déficit seuil
++ 0.3 × Déficit historique
+
 Indemnité =
-Capital × Stress climatique
-× (0.4 + 0.6 × Risque)
+Capital × Indice climatique × (0.4 + 0.6 × Risque)
+
+### 📌 Compensation partielle
+
+Si le risque agricole reste élevé,
+une micro-indemnité minimale peut être appliquée
+même sans sécheresse sévère.
 """)
