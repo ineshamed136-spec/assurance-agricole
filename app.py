@@ -35,6 +35,9 @@ regions = {
     "Médenine": (33.3547, 10.5055)
 }
 
+# =========================
+# CONFIGURATION RÉGIONALE
+# =========================
 geo_conf = {
     "Tunis": {"facteur": 0.9, "seuil": 30.0, "historique": 45.5},
     "Nabeul": {"facteur": 0.85, "seuil": 32.0, "historique": 42.0},
@@ -49,7 +52,7 @@ geo_conf = {
 }
 
 # =========================
-# NASA POWER
+# NASA POWER API
 # =========================
 @st.cache_data(show_spinner=False)
 def get_nasa_weather(region, mois):
@@ -102,8 +105,7 @@ with col1:
     irrigation = st.radio("Irrigation", ["Oui", "Non"], horizontal=True)
 
     sup = st.number_input("Superficie (Ha)", value=15.0)
-
-    prod = st.number_input("Rendement (T/Ha)", value=4.0)
+    rendement = st.number_input("Rendement (T/Ha)", value=4.0)
 
     btn = st.button("🚀 Lancer analyse", type="primary")
 
@@ -121,7 +123,7 @@ with col2:
     cfg = geo_conf[region]
 
     # =========================
-    # VALEUR ASSURÉE SELON CULTURE
+    # VALEUR PAR HECTARE
     # =========================
     if culture == "Céréales":
         valeur_ha = 180
@@ -156,22 +158,21 @@ with col2:
         # =========================
         # CAPITAL
         # =========================
-        production_totale = sup * prod
+        production_totale = sup * rendement
         capital = (sup * valeur_ha) + (production_totale * 25)
 
         # =========================
-        # PRIME
+        # PRIME (corrigée)
         # =========================
-        prime = capital * (0.02 + 0.01 * risque_norm)
+        prime = capital * (0.02 + 0.015 * risque_norm)
 
         # =========================
-        # INDEMNITÉ
+        # INDEMNITÉ (paramétrique)
         # =========================
         seuil = cfg["seuil"]
-
         trigger = max(0, (seuil - pl) / seuil)
 
-        indemn = capital * trigger * (0.3 + 0.7 * risque_norm)
+        indemn = capital * trigger * (0.2 + 0.8 * risque_norm)
 
         # =========================
         # AFFICHAGE
@@ -198,13 +199,14 @@ with col2:
 
         st.write(f"""
 - 🌾 Culture : {culture}
-- 💰 Valeur assurée / ha : {valeur_ha} DT
+- 💰 Valeur/ha : {valeur_ha} DT
+- 📊 Rendement : {rendement} T/ha
 - 📉 Pluie : {pl:.1f} mm
 - 🎯 Seuil : {seuil} mm
-- 📊 Historique : {cfg['historique']} mm
+- 📈 Historique : {cfg['historique']} mm
 
-👉 Le capital dépend de la culture choisie et de la surface exploitée.
-👉 L’indemnité dépend du déficit de pluie + du niveau de risque agricole.
+👉 Le capital dépend de la surface, culture et rendement.
+👉 L’indemnité dépend du déficit de pluie + du risque climatique.
 """)
 
         # =========================
@@ -214,11 +216,11 @@ with col2:
 
             st.markdown("""
 ### 💰 Capital
-Capital = (Superficie × Valeur/ha) + (Production × 25)
+Capital = (Superficie × Valeur/ha) + (Superficie × Rendement × 25)
 
 ### 💳 Prime
-Prime = Capital × (0.02 + 0.01 × Risque)
+Prime = Capital × (0.02 + 0.015 × Risque)
 
 ### 💰 Indemnité
-Indemnité = Capital × max(0, (Seuil - Pluie)/Seuil) × (0.3 + 0.7 × Risque)
+Indemnité = Capital × max(0, (Seuil - Pluie)/Seuil) × (0.2 + 0.8 × Risque)
 """)
