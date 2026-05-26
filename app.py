@@ -55,6 +55,7 @@ geo_conf = {
 # =========================
 @st.cache_data(show_spinner=False)
 def get_nasa_weather(region, mois):
+
     lat, lon = regions[region]
     year = 2024
 
@@ -167,25 +168,41 @@ with col2:
 
         st.divider()
 
+        # 🔴 SINISTRE
         if indice_climatique > 0:
             st.error(f"💰 Indemnité : {indemn:.2f} DT")
         else:
             st.success("✅ Aucun sinistre")
 
         # =========================
-        # INTERPRÉTATION (CORRIGÉE DEMANDÉE)
+        # INTERPRÉTATION (SANS RISQUE)
         # =========================
         st.subheader("📌 Interprétation")
 
         st.write(f"""
-- Pluie : {pl:.1f} mm
-- Seuil : {seuil} mm
+- Pluie observée : {pl:.1f} mm
+- Seuil régional : {seuil} mm
 - Historique : {historique} mm
-- Valeur/ha : {valeur_ha} DT
+- Valeur par hectare : {valeur_ha} DT
 - Capital assuré : {capital:.2f} DT
 
-👉 L’indemnité dépend uniquement du déficit climatique :
-- déficit seuil
-- déficit historique
-- sensibilité du contrat
+👉 L’indemnité dépend uniquement du déficit climatique
+(seuil + historique) combiné à la structure du contrat.
+""")
+
+        # =========================
+        # FORMULES
+        # =========================
+        with st.expander("ℹ️ Formules du modèle"):
+
+            st.markdown("""
+### 💰 Capital
+Capital = (Superficie × Valeur/ha) + (Superficie × Rendement × 25)
+
+### 💳 Prime
+Prime = Capital × (0.02 + 0.015 × Risque)
+
+### 💰 Indemnité
+Indice climatique = 0.6 × déficit seuil + 0.4 × déficit historique  
+Indemnité = Capital × Indice climatique × (0.3 + 0.7 × Risque)
 """)
