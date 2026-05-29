@@ -101,38 +101,6 @@ with col1:
 
     btn = st.button("🚀 Lancer analyse")
 
-# =========================
-# EXPLICATION ALERTES (UI)
-# =========================
-with col1:
-    st.subheader("🚨 Système d’alertes")
-
-    st.info("""
-Le système d’alerte est basé sur le niveau de risque agricole.
-
-### 🔴 Rouge (≥ 70%)
-- Situation critique
-- Intervention urgente
-
-### 🟠 Orange (≥ 30%)
-- Vigilance
-- Risque modéré
-
-### 🟢 Vert (< 30%)
-- Situation normale
-""")
-
-    st.markdown("### 📊 Tableau des niveaux d’alerte")
-    st.table({
-        "Niveau": ["🟢 Vert", "🟠 Orange", "🔴 Rouge"],
-        "Condition": ["< 30%", "30% - 69%", "≥ 70%"],
-        "Interprétation": [
-            "Risque faible",
-            "Vigilance",
-            "Risque critique"
-        ]
-    })
-
 with col2:
 
     t, pl, hum, vent = get_nasa_weather(region, mois)
@@ -155,18 +123,6 @@ with col2:
         # =========================
         risque = min(max((25 * cfg["facteur"]) + (15 if irrigation == "Non" else 0), 5), 95)
         risque_norm = risque / 100
-
-        # =========================
-        # ALERTES
-        # =========================
-        if risque >= 70:
-            st.error("🔴 ALERTE ROUGE : Risque très élevé")
-        elif risque >= 30:
-            st.warning("🟠 ALERTE ORANGE : Risque modéré")
-        else:
-            st.success("🟢 ALERTE VERTE : Situation normale")
-
-        st.progress(int(risque))
 
         # =========================
         # CAPITAL
@@ -212,16 +168,32 @@ with col2:
         st.metric("💰 Indemnité", f"{indemn:.2f} DT")
 
         # =========================
-        # INTERPRÉTATION
+        # 📌 INTERPRÉTATION + ALERTES
         # =========================
         st.subheader("📌 Interprétation")
 
-        st.write(f"""
-- Pluie observée : {pl:.1f} mm
-- Seuil régional : {seuil} mm
-- Historique climatique : {historique} mm
-- Valeur par hectare : {valeur_ha} DT
-- Capital assuré : {capital:.2f} DT
+        if risque >= 70:
+            niveau = "🔴 ROUGE"
+            message = "Situation critique : intervention urgente recommandée"
+        elif risque >= 30:
+            niveau = "🟠 ORANGE"
+            message = "Situation de vigilance : surveillance recommandée"
+        else:
+            niveau = "🟢 VERT"
+            message = "Situation normale : risque faible"
+
+        st.markdown(f"""
+### 🚨 Niveau d’alerte : {niveau}
+
+{message}
+
+---
+
+- 🌧️ Pluie observée : {pl:.1f} mm  
+- 🎯 Seuil régional : {seuil} mm  
+- 📊 Historique climatique : {historique} mm  
+- 🌾 Valeur par hectare : {valeur_ha} DT  
+- 💰 Capital assuré : {capital:.2f} DT  
 """)
 
         # =========================
