@@ -125,6 +125,20 @@ with col2:
         risque_norm = risque / 100
 
         # =========================
+        # 🚨 ALERTES (AJOUTÉ ICI)
+        # =========================
+        if risque >= 70:
+            st.error("🔴 ALERTE ROUGE : Risque très élevé")
+
+        elif risque >= 30:
+            st.warning("🟠 ALERTE ORANGE : Risque modéré")
+
+        else:
+            st.success("🟢 ALERTE VERTE : Situation normale")
+
+        st.progress(int(risque))
+
+        # =========================
         # CAPITAL
         # =========================
         production = superficie * rendement
@@ -150,8 +164,6 @@ with col2:
         # INDEMNITÉ
         # =========================
         indemn = capital * (0.6 * indice_climatique + 0.4 * risque_norm)
-
-        # sécurité métier
         indemn = min(indemn, capital)
 
         # =========================
@@ -167,11 +179,10 @@ with col2:
 
         st.divider()
 
-        # 👉 TOUJOURS afficher l’indemnité (important correction logique)
         st.metric("💰 Indemnité", f"{indemn:.2f} DT")
 
         # =========================
-        # INTERPRÉTATION PROPRE
+        # INTERPRÉTATION
         # =========================
         st.subheader("📌 Interprétation")
 
